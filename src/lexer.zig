@@ -61,11 +61,10 @@ pub const Token = struct {
         .{ "false", Tag.keyword_false },
     });
 
-    literal: ?[]const u8,
-    line: u32,
-    col: u32,
     start: u32,
     end: u32,
+    line: u32,
+    col: u32,
     tag: Tag,
 
     fn getKeyword(keyword: []const u8) ?Tag {
@@ -74,34 +73,32 @@ pub const Token = struct {
 };
 
 pub const Lexer = struct {
-    input: []const u8,
+    input: [:0]const u8,
     line: u32 = 1,
     col: u32 = 0,
     position: u32,
-    current_char: u8,
     tokens: std.ArrayList(Token),
 
     const State = enum {
         start,
         integer,
-        string,
+        // string,
 
-        plus,
-        minus,
-        star,
-        asterisk,
-        bang,
-        equal,
-        angle_bracket_left,
-        angle_bracket_right,
-        dot,
+        // plus,
+        // minus,
+        // star,
+        // asterisk,
+        // bang,
+        // equal,
+        // angle_bracket_left,
+        // angle_bracket_right,
+        // dot,
     };
 
-    pub fn init(allocator: std.mem.Allocator, input: []const u8) Lexer {
+    pub fn init(allocator: std.mem.Allocator, input: [:0]const u8) Lexer {
         return .{
             .input = input,
             .position = 0,
-            .current_char = 0,
             .tokens = std.ArrayList(Token).init(allocator),
         };
     }
@@ -113,10 +110,10 @@ pub const Lexer = struct {
     fn tokenize(self: *Lexer) Token {
         var token: Token = .{
             .tag = .invalid,
+            .start = self.position,
+            .end = self.position + 1,
             .line = self.line,
             .col = self.col,
-            .start = self.position - 1,
-            .literal = null,
         };
 
         state: switch (State.start) {
@@ -132,7 +129,11 @@ pub const Lexer = struct {
                         self.position += 1;
                         continue :state .start;
                     },
-                    '0'...'9' => continue :state .integer,
+                    '0'...'9' => {
+                        token.tag = .integer;
+                        self.position += 1;
+                        continue :state .integer;
+                    },
                     '(' => {
                         self.position += 1;
                         token.tag = .left_paren;
@@ -158,16 +159,19 @@ pub const Lexer = struct {
                         token.tag = .slash;
                     },
                     else => {
-                        continue :state .invalid;
+                        token.end = self.position;
+                        return token;
                     },
                 }
             },
-            .integer => switch (self.input[self.position]) {
-                '0'...'9' => {
-                    self.position += 1;
-                    continue :state .integer;
-                },
-                else => {},
+            .integer => {
+                switch (self.input[self.position]) {
+                    '0'...'9' => {
+                        self.position += 1;
+                        continue :state .integer;
+                    },
+                    else => {},
+                }
             },
         }
 
@@ -175,7 +179,25 @@ pub const Lexer = struct {
     }
 };
 
-test "lexer_init" {
-    const lexer: Lexer = Lexer.init(std.heap.page_allocator, "5+6");
-    try std.testing.expect(lexer.col == 0);
+test "punctuations" {
+    try testLexer("{}()", &.{
+        .left_brace,
+        .right_brace,
+        .left_paren,
+        .right_paren,
+    });
+}
+
+test "integers" {
+    try testLexer("563", &.{.integer});
+}
+
+fn testLexer(source: [:0]const u8, expectedTags: []const Token.Tag) !void {
+    var lexer: Lexer = Lexer.init(std.testing.allocator, source);
+
+    for (expectedTags) |tag| {
+        const tok = lexer.tokenize();
+        try std.testing.expectEqual(tag, tok.tag);
+    }
+    try lexer.dealloc();
 }
