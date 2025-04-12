@@ -103,13 +103,18 @@ pub const Lexer = struct {
         };
     }
 
-    pub fn dealloc(self: *Lexer) !void {
+    pub fn dealloc(self: *Lexer) void {
         self.tokens.deinit();
     }
 
-    fn tokenize(self: *Lexer) Token {
+    /// checking if source is avaliable to scan
+    fn isNext(self: *Lexer) bool {
+        return self.position <= self.input.len;
+    }
+
+    fn next(self: *Lexer) Token {
         var token: Token = .{
-            .tag = .invalid,
+            .tag = undefined,
             .start = self.position,
             .end = self.position + 1,
             .line = self.line,
@@ -119,8 +124,16 @@ pub const Lexer = struct {
         state: switch (State.start) {
             .start => {
                 switch (self.input[self.position]) {
+                    0 => {
+                        if (self.position == self.input.len) {
+                            self.position += 1;
+                            token.tag = .eof;
+                            return token;
+                        }
+                    },
                     ' ', '\t', '\r' => {
                         self.position += 1;
+                        self.col += 1;
                         continue :state .start;
                     },
                     '\n' => {
@@ -132,42 +145,64 @@ pub const Lexer = struct {
                     '0'...'9' => {
                         token.tag = .integer;
                         self.position += 1;
+                        self.col += 1;
                         continue :state .integer;
                     },
                     '(' => {
                         self.position += 1;
+                        self.col += 1;
                         token.tag = .left_paren;
                     },
                     ')' => {
                         self.position += 1;
+                        self.col += 1;
                         token.tag = .right_paren;
                     },
                     '{' => {
                         self.position += 1;
+                        self.col += 1;
                         token.tag = .left_brace;
                     },
                     '}' => {
                         self.position += 1;
+                        self.col += 1;
                         token.tag = .right_brace;
+                    },
+                    '+' => {
+                        self.position += 1;
+                        self.col += 1;
+                        token.tag = .plus;
                     },
                     '-' => {
                         self.position += 1;
+                        self.col += 1;
                         token.tag = .minus;
+                    },
+                    '*' => {
+                        self.position += 1;
+                        self.col += 1;
+                        token.tag = .asterisk;
                     },
                     '/' => {
                         self.position += 1;
+                        self.col += 1;
                         token.tag = .slash;
                     },
                     else => {
                         token.end = self.position;
+                        token.tag = .invalid;
                         return token;
                     },
                 }
             },
+            // .plus => {
+
+            // },
             .integer => {
                 switch (self.input[self.position]) {
                     '0'...'9' => {
                         self.position += 1;
+                        self.col += 1;
                         continue :state .integer;
                     },
                     else => {},
@@ -176,6 +211,14 @@ pub const Lexer = struct {
         }
 
         return token;
+    }
+
+    pub fn tokenize(self: *Lexer) !void {
+        while (self.isNext()) {
+            const token = self.next();
+            std.log.info("{}", .{token.tag});
+            try self.tokens.append(token);
+        }
     }
 };
 
@@ -196,7 +239,7 @@ fn testLexer(source: [:0]const u8, expectedTags: []const Token.Tag) !void {
     var lexer: Lexer = Lexer.init(std.testing.allocator, source);
 
     for (expectedTags) |tag| {
-        const tok = lexer.tokenize();
+        const tok = lexer.next();
         try std.testing.expectEqual(tag, tok.tag);
     }
     try lexer.dealloc();

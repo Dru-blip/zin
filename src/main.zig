@@ -7,8 +7,12 @@ pub fn main() !void {
     defer {
         const check = gpa.deinit();
         if (check == .leak) {
-            std.debug.print("leak detected:{}\n", .{check});
+            std.log.err("leak detected: {}\n", .{check});
         }
     }
-    _ = Lexer.init(allocator, "5+4");
+    var lexer = Lexer.init(allocator, "5+5-5*5/5");
+    defer lexer.dealloc();
+
+    try lexer.tokenize();
+    // std.debug.print("{}", .{lexer.tokens});
 }
