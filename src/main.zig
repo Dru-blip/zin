@@ -15,7 +15,7 @@ pub fn main() !void {
         }
     }
 
-    const source = "5";
+    const source = "if else";
 
     // initialize lexer
     var lexer = Lexer.init(allocator, source);

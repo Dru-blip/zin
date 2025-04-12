@@ -14,6 +14,8 @@ pub const Token = struct {
         keyword_true,
         keyword_false,
 
+        id,
+
         integer,
         float,
         string,
@@ -82,6 +84,7 @@ pub const Lexer = struct {
     const State = enum {
         start,
         integer,
+        identifier,
         // string,
 
         // plus,
@@ -133,6 +136,7 @@ pub const Lexer = struct {
                     },
                     ' ', '\t', '\r' => {
                         self.position += 1;
+                        token.start = self.position;
                         self.col += 1;
                         continue :state .start;
                     },
@@ -147,6 +151,12 @@ pub const Lexer = struct {
                         self.position += 1;
                         self.col += 1;
                         continue :state .integer;
+                    },
+                    'a'...'z', 'A'...'Z', '_' => {
+                        self.position += 1;
+                        self.col += 1;
+                        token.tag = .id;
+                        continue :state .identifier;
                     },
                     '(' => {
                         self.position += 1;
@@ -195,9 +205,16 @@ pub const Lexer = struct {
                     },
                 }
             },
-            // .plus => {
-
-            // },
+            .identifier => {
+                switch (self.input[self.position]) {
+                    'a'...'z', 'A'...'Z', '_' => {
+                        self.position += 1;
+                        self.col += 1;
+                        continue :state .identifier;
+                    },
+                    else => {},
+                }
+            },
             .integer => {
                 switch (self.input[self.position]) {
                     '0'...'9' => {
@@ -210,6 +227,15 @@ pub const Lexer = struct {
             },
         }
 
+        token.end = self.position;
+        token.col = self.col;
+        if (token.tag == .id) {
+            const kv = Token.getKeyword(self.input[token.start..token.end]);
+            // std.debug.print("{any}\n", .{self.input[token.start..token.end]});
+            if (kv != null) {
+                token.tag = kv.?;
+            }
+        }
         return token;
     }
 
@@ -234,6 +260,10 @@ test "integers" {
     try testLexer("563", &.{.integer});
 }
 
+test "identifiers & keywords" {
+    try testLexer("if else", &.{ .keyword_if, .keyword_else });
+}
+
 fn testLexer(source: [:0]const u8, expectedTags: []const Token.Tag) !void {
     var lexer: Lexer = Lexer.init(std.testing.allocator, source);
 
@@ -241,5 +271,5 @@ fn testLexer(source: [:0]const u8, expectedTags: []const Token.Tag) !void {
         const tok = lexer.next();
         try std.testing.expectEqual(tag, tok.tag);
     }
-    try lexer.dealloc();
+    lexer.dealloc();
 }

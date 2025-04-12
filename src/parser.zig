@@ -29,7 +29,9 @@ pub const Node = struct {
         uop: struct {
             lhs: Index,
         },
-        int: struct { value: i32 },
+        int: struct {
+            value: i32,
+        },
     };
 };
 
