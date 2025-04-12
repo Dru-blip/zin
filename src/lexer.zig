@@ -216,7 +216,6 @@ pub const Lexer = struct {
     pub fn tokenize(self: *Lexer) !void {
         while (self.isNext()) {
             const token = self.next();
-            std.log.info("{}", .{token.tag});
             try self.tokens.append(token);
         }
     }
