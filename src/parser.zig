@@ -1,72 +1,15 @@
 const std = @import("std");
+const ast = @import("ast.zig");
 const Token = @import("lexer.zig").Token;
-
-const Index = u24;
-const TokenIndex = u24;
-
-pub const Tag = enum(u8) {
-    binop,
-    uop,
-    int,
-};
+const Index = ast.Index;
+const Ast = ast.Ast;
+const TokenIndex = ast.TokenIndex;
+const Node = ast.Node;
 
 const SyntaxError = error{
     UnexpectedToken,
     UnexpectedEndOfFile,
-};
-
-pub const Node = struct {
-    data: Data,
-    tag: Tag,
-    token: TokenIndex,
-    pub const index: Index = undefined;
-
-    pub const Data = union(Tag) {
-        binop: struct {
-            lhs: Index,
-            rhs: Index,
-        },
-        uop: struct {
-            lhs: Index,
-        },
-        int: struct {
-            value: i32,
-        },
-    };
-};
-
-pub const Ast = struct {
-    nodes: std.MultiArrayList(Node),
-
-    pub fn init() !Ast {
-        return .{
-            .nodes = std.MultiArrayList(Node){},
-        };
-    }
-
-    pub fn deinit(
-        self: *Ast,
-        allocator: std.mem.Allocator,
-    ) void {
-        self.nodes.deinit(allocator);
-    }
-
-    /// append the given node to the array and return its index
-    pub fn append(
-        self: *Ast,
-        allocator: std.mem.Allocator,
-        data: Node.Data,
-        tag: Tag,
-        token: TokenIndex,
-    ) !Index {
-        try self.nodes.append(allocator, .{
-            .data = data,
-            .tag = tag,
-            .token = token,
-        });
-        const length: usize = self.nodes.len - 1;
-        return @truncate(length);
-    }
+    ExpectedIdentifier,
 };
 
 pub const Parser = struct {
@@ -74,8 +17,13 @@ pub const Parser = struct {
     tokens: *std.ArrayList(Token),
     position: TokenIndex,
     source: [:0]const u8,
+    current_token: Token,
     allocator: std.mem.Allocator,
 
+    const State = enum {
+        start,
+        var_decl,
+    };
     /// initialize a new parser with allocator
     pub fn init(
         allocator: std.mem.Allocator,
@@ -85,8 +33,9 @@ pub const Parser = struct {
         return .{
             .tokens = tokens,
             .source = source,
-            .ast = try Ast.init(),
+            .ast = try Ast.init(allocator),
             .allocator = allocator,
+            .current_token = tokens.items[0],
             .position = 0,
         };
     }
@@ -94,9 +43,20 @@ pub const Parser = struct {
     /// deallocate memory for ast nodes
     pub fn deinit(
         self: *Parser,
-        allocator: std.mem.Allocator,
     ) void {
-        self.ast.deinit(allocator);
+        self.ast.deinit();
+    }
+
+    fn advance(self: *Parser) void {
+        self.position += 1;
+        self.current_token = self.tokens.items[self.position];
+    }
+
+    fn eat(self: *Parser, tag: Token.Tag) !void {
+        if (self.current_token.tag != tag) {
+            return SyntaxError.UnexpectedToken;
+        }
+        self.advance();
     }
 
     /// print the flattened AST
@@ -111,16 +71,41 @@ pub const Parser = struct {
     /// top level parse function
     pub fn parse(self: *Parser) !void {
         // parse until eof token is hit
-        while (self.tokens.items[self.position].tag != .eof) {
-            // parse expression and catch error
-            _ = self.parseExpr() catch |err| {
-                // print error message
-                std.log.err("{}", .{err});
-                const tok = self.tokens.items[self.position];
-                std.log.info("{}", .{tok.tag});
-                self.position += 1;
-            };
+        while (self.current_token.tag != .eof) {
+            state: switch (State.start) {
+                .start => {
+                    switch (self.current_token.tag) {
+                        .keyword_var => continue :state .var_decl,
+                        else => return SyntaxError.UnexpectedToken,
+                    }
+                },
+                .var_decl => try self.parseVarDecl(),
+            }
+            // // parse expression and catch error
+            // _ = self.parseExpr() catch |err| {
+            //     // print error message
+            //     std.log.err("{}", .{err});
+            //     const tok = self.tokens.items[self.position];
+            //     std.log.info("{}", .{tok.tag});
+            //     self.position += 1;
+            // };
         }
+    }
+
+    fn parseVarDecl(self: *Parser) !void {
+        try self.eat(.keyword_var);
+        const id = self.position;
+        try self.eat(.id);
+        try self.eat(.equal);
+
+        var data: Node.Data = .{ .var_decl = .{ .init = 0 } };
+        _ = try self.ast.append(
+            data,
+            .var_decl,
+            id,
+        );
+        const initializer = try self.parseExpr();
+        data.var_decl.init = initializer;
     }
 
     /// parse expression
@@ -131,7 +116,7 @@ pub const Parser = struct {
     /// parse integer token
     fn parseInt(self: *Parser) !Index {
         // get the current token
-        const token = self.tokens.items[self.position];
+        const token = self.current_token;
         // if token is not an integer, return unexpected token error
         if (token.tag != .integer) return SyntaxError.UnexpectedToken;
 
@@ -139,13 +124,12 @@ pub const Parser = struct {
         const value = try std.fmt.parseInt(i32, self.source[token.start..token.end], 10);
         // append the integer node to the ast array
         const index = try self.ast.append(
-            self.allocator,
             .{ .int = .{ .value = value } },
             .int,
             self.position,
         );
         // move to the next token
-        self.position += 1;
+        self.advance();
         // return the index of the integer node
         return index;
     }

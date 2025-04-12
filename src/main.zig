@@ -15,7 +15,7 @@ pub fn main() !void {
         }
     }
 
-    const source = "if else";
+    const source = "var x=5";
 
     // initialize lexer
     var lexer = Lexer.init(allocator, source);
@@ -30,7 +30,7 @@ pub fn main() !void {
     var parser = try Parser.init(allocator, source, &lexer.tokens);
 
     // deallocate parser memory when block is exited
-    defer parser.deinit(allocator);
+    defer parser.deinit();
 
     // try to parse the token sequence
     try parser.parse();

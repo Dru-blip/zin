@@ -178,6 +178,11 @@ pub const Lexer = struct {
                         self.col += 1;
                         token.tag = .right_brace;
                     },
+                    '=' => {
+                        self.position += 1;
+                        self.col += 1;
+                        token.tag = .equal;
+                    },
                     '+' => {
                         self.position += 1;
                         self.col += 1;
@@ -261,7 +266,7 @@ test "integers" {
 }
 
 test "identifiers & keywords" {
-    try testLexer("if else", &.{ .keyword_if, .keyword_else });
+    try testLexer("if else var", &.{ .keyword_if, .keyword_else, .keyword_var });
 }
 
 fn testLexer(source: [:0]const u8, expectedTags: []const Token.Tag) !void {
