@@ -1,6 +1,7 @@
 const std = @import("std");
 const Lexer = @import("lexer.zig").Lexer;
 const Parser = @import("parser.zig").Parser;
+const Ast = @import("ast.zig").Ast;
 
 pub fn main() !void {
     // initialize allocator
@@ -15,7 +16,7 @@ pub fn main() !void {
         }
     }
 
-    const source = "var x=5";
+    const source = "var x=12 var y=12";
 
     // initialize lexer
     var lexer = Lexer.init(allocator, source);
@@ -26,15 +27,18 @@ pub fn main() !void {
     // fill the lexer with tokens
     try lexer.tokenize();
 
+    var ast = try Ast.init(allocator);
+    // const arena_allocator = std.heap.ArenaAllocator.init(allocator);
     // initialize parser with token sequence
-    var parser = try Parser.init(allocator, source, &lexer.tokens);
+    var parser = try Parser.init(&ast, source, &lexer.tokens);
 
+    // arena_allocator.deinit();
     // deallocate parser memory when block is exited
-    defer parser.deinit();
+    defer ast.deinit();
 
     // try to parse the token sequence
     try parser.parse();
 
     // print the tree
-    parser.printAst();
+    ast.printAst();
 }

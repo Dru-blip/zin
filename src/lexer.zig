@@ -72,6 +72,52 @@ pub const Token = struct {
     fn getKeyword(keyword: []const u8) ?Tag {
         return keywords.get(keyword);
     }
+
+    pub fn tagToLabel(tag: Tag) []const u8 {
+        return switch (tag) {
+            .id => "id",
+            .integer => "integer",
+            .float => "float",
+            .string => "string",
+
+            .left_paren => "(",
+            .right_paren => ")",
+            .left_brace => "{",
+            .right_brace => "}",
+            .comma => ",",
+            .dot => ".",
+            .semicolon => ";",
+
+            .minus => "-",
+            .plus => "+",
+            .slash => "/",
+            .asterisk => "*",
+            .bang => "!",
+            .bang_equal => "!=",
+            .equal => "=",
+            .equal_equal => "==",
+            .angle_bracket_left => "<",
+            .angle_bracket_right => ">",
+            .angle_bracket_left_equal => "<=",
+            .angle_bracket_right_equal => ">=",
+
+            .keyword_if => "if",
+            .keyword_and => "and",
+            .keyword_or => "or",
+            .keyword_var => "var",
+            .keyword_else => "else",
+            .keyword_def => "def",
+            .keyword_struct => "struct",
+            .keyword_for => "for",
+            .keyword_nil => "nil",
+            .keyword_true => "true",
+            .keyword_false => "false",
+
+            .eof => "eof",
+            .range => "..",
+            .invalid => "invalid",
+        };
+    }
 };
 
 pub const Lexer = struct {
