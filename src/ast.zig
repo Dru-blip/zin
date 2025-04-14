@@ -20,30 +20,27 @@ pub const Node = struct {
 
     pub const Data = union(Tag) {
         var_decl: struct {
-            init: ExprIndex,
+            name: []const u8,
+            init: Index,
         },
         binop: struct {
-            lhs: ExprIndex,
-            rhs: ExprIndex,
+            lhs: Index,
+            rhs: Index,
         },
         uop: struct {
-            lhs: ExprIndex,
+            lhs: Index,
         },
-        int: struct {
-            value: i32,
-        },
+        int: i32,
     };
 };
 
 pub const Ast = struct {
     nodes: std.MultiArrayList(Node),
-    expr_pool: std.MultiArrayList(Node),
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) !Ast {
         return .{
             .nodes = std.MultiArrayList(Node){},
-            .expr_pool = std.MultiArrayList(Node){},
             .allocator = allocator,
         };
     }
@@ -52,7 +49,6 @@ pub const Ast = struct {
         self: *Ast,
     ) void {
         self.nodes.deinit(self.allocator);
-        self.expr_pool.deinit(self.allocator);
     }
 
     /// print the flattened AST
@@ -77,22 +73,6 @@ pub const Ast = struct {
             .token = token,
         });
         const length: usize = self.nodes.len - 1;
-        return @truncate(length);
-    }
-
-    pub fn addExpr(
-        self: *Ast,
-        data: Node.Data,
-        tag: Tag,
-        token: TokenIndex,
-    ) !ExprIndex {
-        try self.expr_pool.append(self.allocator, .{
-            .data = data,
-            .tag = tag,
-            .token = token,
-        });
-
-        const length: usize = self.expr_pool.len - 1;
         return @truncate(length);
     }
 };

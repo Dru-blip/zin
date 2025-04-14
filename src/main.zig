@@ -2,6 +2,7 @@ const std = @import("std");
 const Lexer = @import("lexer.zig").Lexer;
 const Parser = @import("parser.zig").Parser;
 const Ast = @import("ast.zig").Ast;
+const Interpreter = @import("interpret.zig").Interpreter;
 
 pub fn main() !void {
     // initialize allocator
@@ -16,10 +17,20 @@ pub fn main() !void {
         }
     }
 
-    const source = "var x=12+5";
+    const file = try std.fs.cwd().openFile("./examples/hello.zin", .{});
+    defer file.close();
 
+    const file_size = try file.getEndPos();
+
+    const buffer = try allocator.alloc(u8, file_size + 1);
+    defer allocator.free(buffer);
+    _ = try file.readAll(buffer);
+
+    buffer[file_size - 1] = 0;
+
+    const terminated_buffer: [:0]const u8 = buffer[0 .. file_size - 1 :0];
     // initialize lexer
-    var lexer = Lexer.init(allocator, source);
+    var lexer = Lexer.init(allocator, terminated_buffer);
 
     // deallocate lexer memory when block is exited
     defer lexer.dealloc();
@@ -27,10 +38,11 @@ pub fn main() !void {
     // fill the lexer with tokens
     try lexer.tokenize();
 
+    // lexer.printTokens();
     var ast = try Ast.init(allocator);
     // const arena_allocator = std.heap.ArenaAllocator.init(allocator);
     // initialize parser with token sequence
-    var parser = try Parser.init(&ast, source, &lexer.tokens);
+    var parser = try Parser.init(&ast, terminated_buffer, &lexer.tokens);
 
     // arena_allocator.deinit();
     // deallocate parser memory when block is exited
@@ -39,6 +51,7 @@ pub fn main() !void {
     // try to parse the token sequence
     try parser.parse();
 
-    // print the tree
-    ast.printAst();
+    var evaluator = Interpreter.init(&ast, &lexer.tokens);
+
+    evaluator.run();
 }

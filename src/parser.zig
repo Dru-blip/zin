@@ -116,7 +116,10 @@ pub const Parser = struct {
                 .start => {
                     switch (self.current_token.tag) {
                         .keyword_var => continue :state .var_decl,
-                        else => return SyntaxError.UnexpectedToken,
+                        else => {
+                            std.debug.print("{}\n", .{self.current_token});
+                            return SyntaxError.UnexpectedToken;
+                        },
                     }
                 },
                 .var_decl => {
@@ -126,38 +129,32 @@ pub const Parser = struct {
                     };
                 },
             }
-            // // parse expression and catch error
-            // _ = self.parseExpr() catch |err| {
-            //     // print error message
-            //     std.log.err("{}", .{err});
-            //     const tok = self.tokens.items[self.position];
-            //     std.log.info("{}", .{tok.tag});
-            //     self.position += 1;
-            // };
         }
     }
 
     fn varDecl(self: *Parser) !void {
         try self.eat(.keyword_var);
-        const id = self.position;
+        const pos = self.position;
+        const id = self.tokens.items[pos];
         try self.eat(.id);
         try self.eat(.equal);
 
         const initializer = try self.expr(1);
         const data: Node.Data = .{
             .var_decl = .{
+                .name = self.source[id.start..id.end],
                 .init = initializer,
             },
         };
         _ = try self.ast.append(
             data,
             .var_decl,
-            id,
+            pos,
         );
         // self.ast.nodes.get(index).data.var_decl.init = initializer;
     }
 
-    fn prefix(self: *Parser, _: Token.Tag) Errors!ExprIndex {
+    fn prefix(self: *Parser, _: Token.Tag) Errors!Index {
         return try self.int();
     }
 
@@ -170,7 +167,7 @@ pub const Parser = struct {
     }
 
     /// parse expression
-    fn expr(self: *Parser, precedence: u4) Errors!ExprIndex {
+    fn expr(self: *Parser, precedence: u4) Errors!Index {
         var left = try self.prefix(self.current_token.tag);
 
         const token = self.current_token;
@@ -187,7 +184,7 @@ pub const Parser = struct {
             if (right == null) {
                 return left;
             }
-            left = try self.ast.addExpr(
+            left = try self.ast.append(
                 .{
                     .binop = .{
                         .lhs = left,
@@ -202,7 +199,7 @@ pub const Parser = struct {
     }
 
     /// parse integer token
-    fn int(self: *Parser) Errors!ExprIndex {
+    fn int(self: *Parser) Errors!Index {
         // get the current token
         const token = self.current_token;
         // if token is not an integer, return unexpected token error
@@ -214,13 +211,14 @@ pub const Parser = struct {
         // parse the source literal to integer
         const value = try std.fmt.parseInt(i32, self.source[token.start..token.end], 10);
         // append the integer node to the ast array
-        const index = try self.ast.addExpr(
-            .{ .int = .{ .value = value } },
+        const index = try self.ast.append(
+            .{ .int = value },
             .int,
             self.position,
         );
         // move to the next token
         self.advance();
+
         // return the index of the integer node
         return index;
     }

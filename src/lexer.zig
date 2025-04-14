@@ -194,6 +194,7 @@ pub const Lexer = struct {
                         self.line += 1;
                         self.col = 0;
                         self.position += 1;
+                        token.start = self.position;
                         continue :state .start;
                     },
                     '0'...'9' => {
@@ -300,6 +301,12 @@ pub const Lexer = struct {
             try self.tokens.append(token);
         }
     }
+
+    pub fn printTokens(self: *Lexer) void {
+        for (self.tokens.items) |value| {
+            std.debug.print("{}\n", .{value});
+        }
+    }
 };
 
 test "punctuations" {
@@ -316,7 +323,7 @@ test "integers" {
 }
 
 test "keywords" {
-    try testLexer("if else var", &.{ .keyword_if, .keyword_else, .keyword_var });
+    try testLexer("if else var\nvar", &.{ .keyword_if, .keyword_else, .keyword_var, .keyword_var });
 }
 
 fn testLexer(source: [:0]const u8, expectedTags: []const Token.Tag) !void {
