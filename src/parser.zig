@@ -15,6 +15,8 @@ const SyntaxError = error{
     ExpectedInteger,
 };
 
+const Errors = (std.mem.Allocator.Error || SyntaxError || std.fmt.ParseIntError);
+
 pub const Parser = struct {
     ast: *Ast,
     tokens: *std.ArrayList(Token),
@@ -33,6 +35,7 @@ pub const Parser = struct {
         start,
         var_decl,
     };
+
     /// initialize a new parser with allocator
     pub fn init(
         tree: *Ast,
@@ -49,8 +52,17 @@ pub const Parser = struct {
     }
 
     fn advance(self: *Parser) void {
-        self.position += 1;
-        self.current_token = self.tokens.items[self.position];
+        if (self.position + 1 < self.tokens.items.len) {
+            self.position += 1;
+            self.current_token = self.tokens.items[self.position];
+        }
+    }
+
+    inline fn getPrecedence(_: *Parser, tag: Token.Tag) ?u4 {
+        return switch (tag) {
+            .plus, .minus => 2,
+            else => null,
+        };
     }
 
     fn tagToError(_: *Parser, tag: Token.Tag) SyntaxError {
@@ -131,7 +143,7 @@ pub const Parser = struct {
         try self.eat(.id);
         try self.eat(.equal);
 
-        const initializer = try self.expr();
+        const initializer = try self.expr(1);
         const data: Node.Data = .{
             .var_decl = .{
                 .init = initializer,
@@ -145,13 +157,52 @@ pub const Parser = struct {
         // self.ast.nodes.get(index).data.var_decl.init = initializer;
     }
 
+    fn prefix(self: *Parser, _: Token.Tag) Errors!ExprIndex {
+        return try self.int();
+    }
+
+    fn infix(self: *Parser, op_index: TokenIndex) Errors!?ExprIndex {
+        const prec = self.getPrecedence(self.tokens.items[op_index].tag);
+        if (prec == null) {
+            return null;
+        }
+        return try self.expr(prec.? - 1);
+    }
+
     /// parse expression
-    fn expr(self: *Parser) !ExprIndex {
-        return self.int();
+    fn expr(self: *Parser, precedence: u4) Errors!ExprIndex {
+        var left = try self.prefix(self.current_token.tag);
+
+        const token = self.current_token;
+
+        const prece = self.getPrecedence(token.tag);
+        if (prece == null) {
+            return left;
+        }
+        while (precedence < prece.?) {
+            const op = self.position;
+            self.advance();
+
+            const right = try self.infix(op);
+            if (right == null) {
+                return left;
+            }
+            left = try self.ast.addExpr(
+                .{
+                    .binop = .{
+                        .lhs = left,
+                        .rhs = right.?,
+                    },
+                },
+                .binop,
+                op,
+            );
+        }
+        return left;
     }
 
     /// parse integer token
-    fn int(self: *Parser) !ExprIndex {
+    fn int(self: *Parser) Errors!ExprIndex {
         // get the current token
         const token = self.current_token;
         // if token is not an integer, return unexpected token error

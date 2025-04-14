@@ -73,6 +73,10 @@ pub const Token = struct {
         return keywords.get(keyword);
     }
 
+    inline fn isOp(token: Token) bool {
+        return token.tag == .minus or token.tag == .plus or token.tag == .slash or token.tag == .asterisk or token.tag == .bang or token.tag == .bang_equal or token.tag == .equal or token.tag == .equal_equal or token.tag == .angle_bracket_left or token.tag == .angle_bracket_right or token.tag == .angle_bracket_left_equal or token.tag == .angle_bracket_right_equal;
+    }
+
     pub fn tagToLabel(tag: Tag) []const u8 {
         return switch (tag) {
             .id => "id",
@@ -311,7 +315,7 @@ test "integers" {
     try testLexer("563", &.{.integer});
 }
 
-test "identifiers & keywords" {
+test "keywords" {
     try testLexer("if else var", &.{ .keyword_if, .keyword_else, .keyword_var });
 }
 
