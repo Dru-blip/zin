@@ -1,5 +1,6 @@
 const std = @import("std");
 const pool = @import("../pool.zig");
+const Value = @import("../value.zig").Value;
 
 // opcodes - u8 enum
 pub const Opcode = enum(u8) {
@@ -38,5 +39,9 @@ pub const Unit = struct {
 
     pub fn add(self: *Unit, value: []const u8) !void {
         try self.code.appendSlice(value);
+    }
+
+    pub fn getInt(self: *Unit, index: u32) !Value {
+        return self.data_pool.getInt(index);
     }
 };

@@ -5,6 +5,7 @@ const Ast = @import("ast.zig").Ast;
 const DataPool = @import("pool.zig").DataPool;
 const Compiler = @import("./bytecode/compiler.zig").Compiler;
 const Disassembler = @import("./bytecode/disassembler.zig").Disassembler;
+const VM = @import("./vm/vm.zig").VM;
 
 pub fn main() !void {
     // initialize allocator
@@ -62,7 +63,12 @@ pub fn main() !void {
 
     try compiler.compile();
 
-    var dis = Disassembler.init(&data_pool, &compiler.unit);
+    var vm = VM.init(allocator, &compiler.unit);
 
-    try dis.disassemble();
+    defer vm.deinit();
+
+    try vm.run();
+    // var dis = Disassembler.init(&data_pool, &compiler.unit);
+
+    // try dis.disassemble();
 }

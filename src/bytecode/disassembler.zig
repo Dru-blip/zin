@@ -35,7 +35,7 @@ pub const Disassembler = struct {
                         value,
                         index,
                         index,
-                        self.data_pool.getInt(index),
+                        self.data_pool.getInt(index).data.int,
                     });
                     self.ip += 5;
                 },

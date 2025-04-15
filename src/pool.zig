@@ -41,7 +41,7 @@ pub const DataPool = struct {
         return self.identifiers.get(index);
     }
 
-    pub fn getInt(self: *DataPool, index: ConstIndex) i32 {
-        return self.int_pool.get(index).data.int;
+    pub fn getInt(self: *DataPool, index: ConstIndex) value.Value {
+        return self.int_pool.get(index);
     }
 };
