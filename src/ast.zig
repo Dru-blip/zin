@@ -1,9 +1,13 @@
 const std = @import("std");
+const pool = @import("pool.zig");
+
 const Token = @import("lexer.zig").Token;
+
+const IdentIndex = pool.IdentIndex;
+const ConstIndex = pool.ConstIndex;
 
 pub const Index = u24;
 pub const TokenIndex = u24;
-pub const ExprIndex = u24;
 
 pub const Tag = enum(u8) {
     var_decl,
@@ -20,7 +24,7 @@ pub const Node = struct {
 
     pub const Data = union(Tag) {
         var_decl: struct {
-            name: []const u8,
+            name: IdentIndex,
             init: Index,
         },
         binop: struct {
@@ -30,7 +34,7 @@ pub const Node = struct {
         uop: struct {
             lhs: Index,
         },
-        int: i32,
+        int: ConstIndex,
     };
 };
 

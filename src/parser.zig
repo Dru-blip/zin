@@ -1,11 +1,14 @@
 const std = @import("std");
 const ast = @import("ast.zig");
+const pool = @import("pool.zig");
 const Token = @import("lexer.zig").Token;
 const Index = ast.Index;
-const ExprIndex = ast.ExprIndex;
+
 const Ast = ast.Ast;
 const TokenIndex = ast.TokenIndex;
 const Node = ast.Node;
+const IdentIndex = pool.IdentIndex;
+const ConstIndex = pool.ConstIndex;
 
 const SyntaxError = error{
     UnexpectedToken,
@@ -19,6 +22,7 @@ const Errors = (std.mem.Allocator.Error || SyntaxError || std.fmt.ParseIntError)
 
 pub const Parser = struct {
     ast: *Ast,
+    data_pool: *pool.DataPool,
     tokens: *std.ArrayList(Token),
     position: TokenIndex,
     source: [:0]const u8,
@@ -39,12 +43,14 @@ pub const Parser = struct {
     /// initialize a new parser with allocator
     pub fn init(
         tree: *Ast,
+        data_pool: *pool.DataPool,
         source: [:0]const u8,
         tokens: *std.ArrayList(Token),
     ) !Parser {
         return .{
             .tokens = tokens,
             .source = source,
+            .data_pool = data_pool,
             .ast = tree,
             .current_token = tokens.items[0],
             .position = 0,
@@ -140,9 +146,12 @@ pub const Parser = struct {
         try self.eat(.equal);
 
         const initializer = try self.expr(1);
+        // const name=self. Complete the pool
+        //
+        const ind = try self.data_pool.addIdent(self.source[id.start..id.end]);
         const data: Node.Data = .{
             .var_decl = .{
-                .name = self.source[id.start..id.end],
+                .name = ind,
                 .init = initializer,
             },
         };
@@ -158,7 +167,7 @@ pub const Parser = struct {
         return try self.int();
     }
 
-    fn infix(self: *Parser, op_index: TokenIndex) Errors!?ExprIndex {
+    fn infix(self: *Parser, op_index: TokenIndex) Errors!?Index {
         const prec = self.getPrecedence(self.tokens.items[op_index].tag);
         if (prec == null) {
             return null;
@@ -210,9 +219,11 @@ pub const Parser = struct {
 
         // parse the source literal to integer
         const value = try std.fmt.parseInt(i32, self.source[token.start..token.end], 10);
+
+        const pool_ind = try self.data_pool.addInt(value);
         // append the integer node to the ast array
         const index = try self.ast.append(
-            .{ .int = value },
+            .{ .int = pool_ind },
             .int,
             self.position,
         );

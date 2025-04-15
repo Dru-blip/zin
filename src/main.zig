@@ -2,6 +2,7 @@ const std = @import("std");
 const Lexer = @import("lexer.zig").Lexer;
 const Parser = @import("parser.zig").Parser;
 const Ast = @import("ast.zig").Ast;
+const DataPool = @import("pool.zig").DataPool;
 const Interpreter = @import("interpret.zig").Interpreter;
 
 pub fn main() !void {
@@ -38,11 +39,14 @@ pub fn main() !void {
     // fill the lexer with tokens
     try lexer.tokenize();
 
+    var data_pool = DataPool.init(allocator);
+
+    defer data_pool.deinit();
     // lexer.printTokens();
     var ast = try Ast.init(allocator);
     // const arena_allocator = std.heap.ArenaAllocator.init(allocator);
     // initialize parser with token sequence
-    var parser = try Parser.init(&ast, terminated_buffer, &lexer.tokens);
+    var parser = try Parser.init(&ast, &data_pool, terminated_buffer, &lexer.tokens);
 
     // arena_allocator.deinit();
     // deallocate parser memory when block is exited
