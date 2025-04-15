@@ -50,8 +50,25 @@ pub const Disassembler = struct {
                     });
                     self.ip += 5;
                 },
+                .add => {
+                    try writer.print("0x{x:0>4} add\n", .{value});
+                    self.ip += 1;
+                },
+                .minus => {
+                    try writer.print("0x{x:0>4} minus\n", .{value});
+                    self.ip += 1;
+                },
+                .mul => {
+                    try writer.print("0x{x:0>4} mul\n", .{value});
+                    self.ip += 1;
+                },
+                .div => {
+                    try writer.print("0x{x:0>4} div\n", .{value});
+                    self.ip += 1;
+                },
                 else => {
                     std.debug.print("Unknown opcode: {}\n", .{tag});
+                    break;
                 },
             }
         }

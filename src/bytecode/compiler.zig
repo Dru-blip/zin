@@ -6,6 +6,7 @@ const pool = @import("../pool.zig");
 const Ast = ast.Ast;
 const Index = ast.Index;
 const Node = ast.Node;
+const TokenIndex = ast.TokenIndex;
 const Token = @import("../lexer.zig").Token;
 
 pub const Compiler = struct {
@@ -47,9 +48,18 @@ pub const Compiler = struct {
     }
 
     fn emit(self: *Compiler) !void {
-        for (self.tree.nodes.items(.tag), self.tree.nodes.items(.data)) |tag, data| {
+        for (
+            self.tree.nodes.items(.token),
+            self.tree.nodes.items(.tag),
+            self.tree.nodes.items(.data),
+        ) |
+            token,
+            tag,
+            data,
+        | {
             switch (tag) {
                 .var_decl => try self.emitVarDecl(data),
+                .binop => try self.emitBinOp(token),
                 .int => try self.emitLoadInt(data),
                 else => {},
             }
@@ -60,6 +70,11 @@ pub const Compiler = struct {
         try self.unit.addOpcode(.store);
         const bytes = try splitIntoBytes(data.var_decl.name);
         try self.unit.add(bytes);
+    }
+
+    fn emitBinOp(self: *Compiler, token: TokenIndex) !void {
+        const operator = self.tokens.items[token].tag;
+        try self.unit.addOpcode(unit.Opcode.tokenToOpcode(operator));
     }
 
     /// Emit a load integer instruction,

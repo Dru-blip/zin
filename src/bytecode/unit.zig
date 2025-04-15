@@ -1,6 +1,7 @@
 const std = @import("std");
 const pool = @import("../pool.zig");
 const Value = @import("../value.zig").Value;
+const Tag = @import("../lexer.zig").Token.Tag;
 
 // opcodes - u8 enum
 pub const Opcode = enum(u8) {
@@ -12,6 +13,18 @@ pub const Opcode = enum(u8) {
     get,
     add,
     minus,
+    mul,
+    div,
+
+    pub inline fn tokenToOpcode(tag: Tag) Opcode {
+        return switch (tag) {
+            .plus => Opcode.add,
+            .minus => Opcode.minus,
+            .asterisk => Opcode.mul,
+            .slash => Opcode.div,
+            else => unreachable,
+        };
+    }
 };
 
 /// structure for storing a module's bytecode information
