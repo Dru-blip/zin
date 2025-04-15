@@ -3,7 +3,8 @@ const Lexer = @import("lexer.zig").Lexer;
 const Parser = @import("parser.zig").Parser;
 const Ast = @import("ast.zig").Ast;
 const DataPool = @import("pool.zig").DataPool;
-const Interpreter = @import("interpret.zig").Interpreter;
+const Compiler = @import("./bytecode/compiler.zig").Compiler;
+const Disassembler = @import("./bytecode/disassembler.zig").Disassembler;
 
 pub fn main() !void {
     // initialize allocator
@@ -55,7 +56,13 @@ pub fn main() !void {
     // try to parse the token sequence
     try parser.parse();
 
-    var evaluator = Interpreter.init(&ast, &lexer.tokens);
+    // ast.printAst();
+    var compiler = Compiler.init(allocator, &ast, &data_pool, &lexer.tokens);
+    defer compiler.deinit();
 
-    evaluator.run();
+    try compiler.compile();
+
+    var dis = Disassembler.init(&data_pool, &compiler.unit);
+
+    try dis.disassemble();
 }
