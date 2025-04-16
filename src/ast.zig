@@ -14,6 +14,7 @@ pub const Tag = enum(u8) {
     binop,
     uop,
     int,
+    id,
 };
 
 pub const Node = struct {
@@ -35,17 +36,20 @@ pub const Node = struct {
             lhs: Index,
         },
         int: ConstIndex,
+        id: IdentIndex,
     };
 };
 
 pub const Ast = struct {
     nodes: std.MultiArrayList(Node),
     allocator: std.mem.Allocator,
+    tokens: *std.ArrayList(Token),
 
-    pub fn init(allocator: std.mem.Allocator) !Ast {
+    pub fn init(allocator: std.mem.Allocator, tokens: *std.ArrayList(Token)) !Ast {
         return .{
             .nodes = std.MultiArrayList(Node){},
             .allocator = allocator,
+            .tokens = tokens,
         };
     }
 
@@ -53,15 +57,6 @@ pub const Ast = struct {
         self: *Ast,
     ) void {
         self.nodes.deinit(self.allocator);
-    }
-
-    /// print the flattened AST
-    pub fn printAst(self: *Ast) void {
-        var i: usize = 0;
-        while (self.nodes.len > i) : (i += 1) {
-            const node = self.nodes.get(i);
-            std.log.info("ast {}: {} {}", .{ i, node.tag, node.data });
-        }
     }
 
     /// append the given node to the array and return its index

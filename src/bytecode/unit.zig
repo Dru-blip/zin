@@ -22,6 +22,7 @@ pub const Opcode = enum(u8) {
             .minus => Opcode.minus,
             .asterisk => Opcode.mul,
             .slash => Opcode.div,
+            .equal => Opcode.store,
             else => unreachable,
         };
     }

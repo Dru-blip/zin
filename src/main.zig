@@ -45,7 +45,7 @@ pub fn main() !void {
 
     defer data_pool.deinit();
     // lexer.printTokens();
-    var ast = try Ast.init(allocator);
+    var ast = try Ast.init(allocator, &lexer.tokens);
     // const arena_allocator = std.heap.ArenaAllocator.init(allocator);
     // initialize parser with token sequence
     var parser = try Parser.init(&ast, &data_pool, terminated_buffer, &lexer.tokens);
@@ -57,18 +57,15 @@ pub fn main() !void {
     // try to parse the token sequence
     try parser.parse();
 
-    // ast.printAst();
+    // try ast.printAst(&data_pool);
     var compiler = Compiler.init(allocator, &ast, &data_pool, &lexer.tokens);
     defer compiler.deinit();
 
     try compiler.compile();
 
-    // var vm = VM.init(allocator, &compiler.unit);
+    var vm = VM.init(allocator, &compiler.unit);
 
-    // defer vm.deinit();
+    defer vm.deinit();
 
-    // try vm.run();
-    var dis = Disassembler.init(&data_pool, &compiler.unit);
-
-    try dis.disassemble();
+    try vm.run();
 }

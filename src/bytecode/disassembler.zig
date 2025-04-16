@@ -50,6 +50,17 @@ pub const Disassembler = struct {
                     });
                     self.ip += 5;
                 },
+                .get => {
+                    const bytes = self.unit.code.items[self.ip + 1 .. self.ip + 5];
+                    const index = combineBytes(bytes);
+                    try writer.print("0x{x:0>4} 0x{x:0>4}  get {}  [{s}]\n", .{
+                        value,
+                        index,
+                        index,
+                        self.data_pool.getIdentifier(index),
+                    });
+                    self.ip += 5;
+                },
                 .add => {
                     try writer.print("0x{x:0>4} add\n", .{value});
                     self.ip += 1;

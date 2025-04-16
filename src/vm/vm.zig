@@ -51,6 +51,46 @@ pub const VM = struct {
                     const val = self.stack.pop();
                     try self.globals.insert(key, val.?);
                 },
+                .get => {
+                    self.ip += 1;
+                    const index = self.readNext4Bytes();
+                    const key = self.module.data_pool.getIdentifier(index);
+                    const val = self.globals.lookup(key);
+                    try self.stack.append(val.?);
+                },
+                .add => {
+                    const a = self.stack.pop();
+                    const b = self.stack.pop();
+                    self.ip += 1;
+                    try self.stack.append(.{
+                        .tag = .int,
+                        .data = .{
+                            .int = a.?.data.int + b.?.data.int,
+                        },
+                    });
+                },
+                .minus => {
+                    const a = self.stack.pop();
+                    const b = self.stack.pop();
+                    self.ip += 1;
+                    try self.stack.append(.{
+                        .tag = .int,
+                        .data = .{
+                            .int = a.?.data.int - b.?.data.int,
+                        },
+                    });
+                },
+                .mul => {
+                    const a = self.stack.pop();
+                    const b = self.stack.pop();
+                    self.ip += 1;
+                    try self.stack.append(.{
+                        .tag = .int,
+                        .data = .{
+                            .int = a.?.data.int * b.?.data.int,
+                        },
+                    });
+                },
                 else => {
                     break;
                 },
@@ -64,7 +104,5 @@ pub const VM = struct {
         const val = try self.module.getInt(index);
 
         try self.stack.append(val);
-        // const value = self.globals
-        // self.stack.append(value) catch unreachable;
     }
 };

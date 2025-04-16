@@ -67,6 +67,7 @@ pub const Parser = struct {
     inline fn getPrecedence(_: *Parser, tag: Token.Tag) ?u4 {
         return switch (tag) {
             .plus, .minus => 2,
+            .asterisk, .slash => 3,
             else => null,
         };
     }
@@ -146,8 +147,6 @@ pub const Parser = struct {
         try self.eat(.equal);
 
         const initializer = try self.expr(1);
-        // const name=self. Complete the pool
-        //
         const ind = try self.data_pool.addIdent(self.source[id.start..id.end]);
         const data: Node.Data = .{
             .var_decl = .{
@@ -160,11 +159,17 @@ pub const Parser = struct {
             .var_decl,
             pos,
         );
-        // self.ast.nodes.get(index).data.var_decl.init = initializer;
     }
 
-    fn prefix(self: *Parser, _: Token.Tag) Errors!Index {
-        return try self.int();
+    fn prefix(self: *Parser, tag: Token.Tag) Errors!Index {
+        switch (tag) {
+            .id => return try self.identifier(),
+            .integer => return try self.int(),
+            else => {
+                self.recordError(.id);
+                return SyntaxError.UnexpectedToken;
+            },
+        }
     }
 
     fn infix(self: *Parser, op_index: TokenIndex) Errors!?Index {
@@ -179,32 +184,57 @@ pub const Parser = struct {
     fn expr(self: *Parser, precedence: u4) Errors!Index {
         var left = try self.prefix(self.current_token.tag);
 
-        const token = self.current_token;
+        while (true) {
+            const token = self.current_token;
+            const prec = self.getPrecedence(token.tag);
 
-        const prece = self.getPrecedence(token.tag);
-        if (prece == null) {
-            return left;
-        }
-        while (precedence < prece.?) {
+            if (prec == null or precedence >= prec.?) {
+                break;
+            }
+
             const op = self.position;
             self.advance();
 
-            const right = try self.infix(op);
-            if (right == null) {
-                return left;
-            }
+            const right = try self.infix(op) orelse break;
             left = try self.ast.append(
                 .{
                     .binop = .{
                         .lhs = left,
-                        .rhs = right.?,
+                        .rhs = right,
                     },
                 },
                 .binop,
                 op,
             );
         }
+
         return left;
+    }
+
+    fn identifier(self: *Parser) Errors!Index {
+        // get the current token
+        const token = self.current_token;
+        // if token is not an identifier, return unexpected token error
+        if (token.tag != .id) {
+            self.recordError(.id);
+            return SyntaxError.ExpectedIdentifier;
+        }
+
+        // parse the source literal to identifier
+        const value = self.source[token.start..token.end];
+
+        const pool_ind = try self.data_pool.addIdent(value);
+        // append the identifier node to the ast array
+        const index = try self.ast.append(
+            .{ .id = pool_ind },
+            .id,
+            self.position,
+        );
+        // move to the next token
+        self.advance();
+
+        // return the index of the identifier node
+        return index;
     }
 
     /// parse integer token

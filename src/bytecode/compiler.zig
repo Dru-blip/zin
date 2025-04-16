@@ -60,6 +60,7 @@ pub const Compiler = struct {
             switch (tag) {
                 .var_decl => try self.emitVarDecl(data),
                 .binop => try self.emitBinOp(token),
+                .id => try self.emitGetId(data),
                 .int => try self.emitLoadInt(data),
                 else => {},
             }
@@ -75,6 +76,12 @@ pub const Compiler = struct {
     fn emitBinOp(self: *Compiler, token: TokenIndex) !void {
         const operator = self.tokens.items[token].tag;
         try self.unit.addOpcode(unit.Opcode.tokenToOpcode(operator));
+    }
+
+    fn emitGetId(self: *Compiler, data: Node.Data) !void {
+        try self.unit.addOpcode(.get);
+        const bytes = try splitIntoBytes(data.id);
+        try self.unit.add(bytes);
     }
 
     /// Emit a load integer instruction,
