@@ -124,190 +124,190 @@ pub const Token = struct {
     }
 };
 
-pub const Lexer = struct {
-    input: [:0]const u8,
-    line: u32 = 1,
-    col: u32 = 0,
-    position: u32,
-    tokens: std.ArrayList(Token),
+const Lexer = @This();
 
-    const State = enum {
-        start,
-        integer,
-        identifier,
-        // string,
+input: [:0]const u8,
+line: u32 = 1,
+col: u32 = 0,
+position: u32,
+tokens: std.ArrayList(Token),
 
-        // plus,
-        // minus,
-        // star,
-        // asterisk,
-        // bang,
-        // equal,
-        // angle_bracket_left,
-        // angle_bracket_right,
-        // dot,
+const State = enum {
+    start,
+    integer,
+    identifier,
+    // string,
+
+    // plus,
+    // minus,
+    // star,
+    // asterisk,
+    // bang,
+    // equal,
+    // angle_bracket_left,
+    // angle_bracket_right,
+    // dot,
+};
+
+pub fn init(allocator: std.mem.Allocator, input: [:0]const u8) Lexer {
+    return .{
+        .input = input,
+        .position = 0,
+        .tokens = std.ArrayList(Token).init(allocator),
+    };
+}
+
+pub fn dealloc(self: *Lexer) void {
+    self.tokens.deinit();
+}
+
+/// checking if source is avaliable to scan
+fn isNext(self: *Lexer) bool {
+    return self.position <= self.input.len;
+}
+
+fn next(self: *Lexer) Token {
+    var token: Token = .{
+        .tag = undefined,
+        .start = self.position,
+        .end = self.position + 1,
+        .line = self.line,
+        .col = self.col,
     };
 
-    pub fn init(allocator: std.mem.Allocator, input: [:0]const u8) Lexer {
-        return .{
-            .input = input,
-            .position = 0,
-            .tokens = std.ArrayList(Token).init(allocator),
-        };
-    }
-
-    pub fn dealloc(self: *Lexer) void {
-        self.tokens.deinit();
-    }
-
-    /// checking if source is avaliable to scan
-    fn isNext(self: *Lexer) bool {
-        return self.position <= self.input.len;
-    }
-
-    fn next(self: *Lexer) Token {
-        var token: Token = .{
-            .tag = undefined,
-            .start = self.position,
-            .end = self.position + 1,
-            .line = self.line,
-            .col = self.col,
-        };
-
-        state: switch (State.start) {
-            .start => {
-                switch (self.input[self.position]) {
-                    0 => {
-                        if (self.position == self.input.len) {
-                            self.position += 1;
-                            token.tag = .eof;
-                            return token;
-                        }
-                    },
-                    ' ', '\t', '\r' => {
+    state: switch (State.start) {
+        .start => {
+            switch (self.input[self.position]) {
+                0 => {
+                    if (self.position == self.input.len) {
                         self.position += 1;
-                        token.start = self.position;
-                        self.col += 1;
-                        continue :state .start;
-                    },
-                    '\n' => {
-                        self.line += 1;
-                        self.col = 0;
-                        self.position += 1;
-                        token.start = self.position;
-                        continue :state .start;
-                    },
-                    '0'...'9' => {
-                        token.tag = .integer;
-                        self.position += 1;
-                        self.col += 1;
-                        continue :state .integer;
-                    },
-                    'a'...'z', 'A'...'Z', '_' => {
-                        self.position += 1;
-                        self.col += 1;
-                        token.tag = .id;
-                        continue :state .identifier;
-                    },
-                    '(' => {
-                        self.position += 1;
-                        self.col += 1;
-                        token.tag = .left_paren;
-                    },
-                    ')' => {
-                        self.position += 1;
-                        self.col += 1;
-                        token.tag = .right_paren;
-                    },
-                    '{' => {
-                        self.position += 1;
-                        self.col += 1;
-                        token.tag = .left_brace;
-                    },
-                    '}' => {
-                        self.position += 1;
-                        self.col += 1;
-                        token.tag = .right_brace;
-                    },
-                    '=' => {
-                        self.position += 1;
-                        self.col += 1;
-                        token.tag = .equal;
-                    },
-                    '+' => {
-                        self.position += 1;
-                        self.col += 1;
-                        token.tag = .plus;
-                    },
-                    '-' => {
-                        self.position += 1;
-                        self.col += 1;
-                        token.tag = .minus;
-                    },
-                    '*' => {
-                        self.position += 1;
-                        self.col += 1;
-                        token.tag = .asterisk;
-                    },
-                    '/' => {
-                        self.position += 1;
-                        self.col += 1;
-                        token.tag = .slash;
-                    },
-                    else => {
-                        token.end = self.position;
-                        token.tag = .invalid;
+                        token.tag = .eof;
                         return token;
-                    },
-                }
-            },
-            .identifier => {
-                switch (self.input[self.position]) {
-                    'a'...'z', 'A'...'Z', '_' => {
-                        self.position += 1;
-                        self.col += 1;
-                        continue :state .identifier;
-                    },
-                    else => {},
-                }
-            },
-            .integer => {
-                switch (self.input[self.position]) {
-                    '0'...'9' => {
-                        self.position += 1;
-                        self.col += 1;
-                        continue :state .integer;
-                    },
-                    else => {},
-                }
-            },
-        }
-
-        token.end = self.position;
-        token.col = self.col;
-        if (token.tag == .id) {
-            const kv = Token.getKeyword(self.input[token.start..token.end]);
-            // std.debug.print("{any}\n", .{self.input[token.start..token.end]});
-            if (kv != null) {
-                token.tag = kv.?;
+                    }
+                },
+                ' ', '\t', '\r' => {
+                    self.position += 1;
+                    token.start = self.position;
+                    self.col += 1;
+                    continue :state .start;
+                },
+                '\n' => {
+                    self.line += 1;
+                    self.col = 0;
+                    self.position += 1;
+                    token.start = self.position;
+                    continue :state .start;
+                },
+                '0'...'9' => {
+                    token.tag = .integer;
+                    self.position += 1;
+                    self.col += 1;
+                    continue :state .integer;
+                },
+                'a'...'z', 'A'...'Z', '_' => {
+                    self.position += 1;
+                    self.col += 1;
+                    token.tag = .id;
+                    continue :state .identifier;
+                },
+                '(' => {
+                    self.position += 1;
+                    self.col += 1;
+                    token.tag = .left_paren;
+                },
+                ')' => {
+                    self.position += 1;
+                    self.col += 1;
+                    token.tag = .right_paren;
+                },
+                '{' => {
+                    self.position += 1;
+                    self.col += 1;
+                    token.tag = .left_brace;
+                },
+                '}' => {
+                    self.position += 1;
+                    self.col += 1;
+                    token.tag = .right_brace;
+                },
+                '=' => {
+                    self.position += 1;
+                    self.col += 1;
+                    token.tag = .equal;
+                },
+                '+' => {
+                    self.position += 1;
+                    self.col += 1;
+                    token.tag = .plus;
+                },
+                '-' => {
+                    self.position += 1;
+                    self.col += 1;
+                    token.tag = .minus;
+                },
+                '*' => {
+                    self.position += 1;
+                    self.col += 1;
+                    token.tag = .asterisk;
+                },
+                '/' => {
+                    self.position += 1;
+                    self.col += 1;
+                    token.tag = .slash;
+                },
+                else => {
+                    token.end = self.position;
+                    token.tag = .invalid;
+                    return token;
+                },
             }
-        }
-        return token;
+        },
+        .identifier => {
+            switch (self.input[self.position]) {
+                'a'...'z', 'A'...'Z', '_' => {
+                    self.position += 1;
+                    self.col += 1;
+                    continue :state .identifier;
+                },
+                else => {},
+            }
+        },
+        .integer => {
+            switch (self.input[self.position]) {
+                '0'...'9' => {
+                    self.position += 1;
+                    self.col += 1;
+                    continue :state .integer;
+                },
+                else => {},
+            }
+        },
     }
 
-    pub fn tokenize(self: *Lexer) !void {
-        while (self.isNext()) {
-            const token = self.next();
-            try self.tokens.append(token);
+    token.end = self.position;
+    token.col = self.col;
+    if (token.tag == .id) {
+        const kv = Token.getKeyword(self.input[token.start..token.end]);
+        // std.debug.print("{any}\n", .{self.input[token.start..token.end]});
+        if (kv != null) {
+            token.tag = kv.?;
         }
     }
+    return token;
+}
 
-    pub fn printTokens(self: *Lexer) void {
-        for (self.tokens.items) |value| {
-            std.debug.print("{}\n", .{value});
-        }
+pub fn tokenize(self: *Lexer) !void {
+    while (self.isNext()) {
+        const token = self.next();
+        try self.tokens.append(token);
     }
-};
+}
+
+pub fn printTokens(self: *Lexer) void {
+    for (self.tokens.items) |value| {
+        std.debug.print("{}\n", .{value});
+    }
+}
 
 test "punctuations" {
     try testLexer("{}()", &.{

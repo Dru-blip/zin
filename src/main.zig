@@ -1,11 +1,11 @@
 const std = @import("std");
-const Lexer = @import("lexer.zig").Lexer;
-const Parser = @import("parser.zig").Parser;
-const Ast = @import("ast.zig").Ast;
-const DataPool = @import("pool.zig").DataPool;
-const Compiler = @import("./bytecode/compiler.zig").Compiler;
-const Disassembler = @import("./bytecode/disassembler.zig").Disassembler;
-const VM = @import("./vm/vm.zig").VM;
+const Lexer = @import("lexer.zig");
+const Parser = @import("parser.zig");
+const Ast = @import("ast.zig");
+const DataPool = @import("DataPool.zig");
+const Compiler = @import("./bytecode/compiler.zig");
+const Disassembler = @import("./bytecode/disassembler.zig");
+const VM = @import("./vm/vm.zig");
 
 pub fn main() !void {
     // initialize allocator
@@ -33,37 +33,37 @@ pub fn main() !void {
 
     const terminated_buffer: [:0]const u8 = buffer[0 .. file_size - 1 :0];
     // initialize lexer
-    var lexer = Lexer.init(allocator, terminated_buffer);
+    var lex = Lexer.init(allocator, terminated_buffer);
 
     // deallocate lexer memory when block is exited
-    defer lexer.dealloc();
+    defer lex.dealloc();
 
     // fill the lexer with tokens
-    try lexer.tokenize();
+    try lex.tokenize();
 
     var data_pool = DataPool.init(allocator);
 
     defer data_pool.deinit();
     // lexer.printTokens();
-    var ast = try Ast.init(allocator, &lexer.tokens);
+    var tree = try Ast.init(allocator, &lex.tokens);
     // const arena_allocator = std.heap.ArenaAllocator.init(allocator);
     // initialize parser with token sequence
-    var parser = try Parser.init(&ast, &data_pool, terminated_buffer, &lexer.tokens);
+    var parser = try Parser.init(&tree, &data_pool, terminated_buffer, &lex.tokens);
 
     // arena_allocator.deinit();
     // deallocate parser memory when block is exited
-    defer ast.deinit();
+    defer tree.deinit();
 
     // try to parse the token sequence
     try parser.parse();
 
     // try ast.printAst(&data_pool);
-    var compiler = Compiler.init(allocator, &ast, &data_pool, &lexer.tokens);
-    defer compiler.deinit();
+    var bc = Compiler.init(allocator, &tree, &data_pool, &lex.tokens);
+    defer bc.deinit();
 
-    try compiler.compile();
+    try bc.compile();
 
-    var vm = VM.init(allocator, &compiler.unit);
+    var vm = VM.init(allocator, &bc.unit);
 
     defer vm.deinit();
 

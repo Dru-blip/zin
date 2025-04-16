@@ -1,5 +1,5 @@
 /// tag to identify the type of object
-const ObjTag = enum(u8) {
+pub const ObjTag = enum(u8) {
     list,
     map,
     class,
@@ -9,8 +9,7 @@ const ObjTag = enum(u8) {
     instance,
 };
 
-/// garbage collected object
-pub const GcObj = struct {
-    tag: ObjTag,
-    next: *GcObj,
-};
+const GcObject = @This();
+
+tag: ObjTag,
+next: *GcObject,

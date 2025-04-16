@@ -1,14 +1,14 @@
 const std = @import("std");
-const GcObj = @import("object.zig").GcObj;
+const GcObj = @import("object.zig");
 
-const GC = struct {
-    allocator: std.mem.Allocator,
-    root: *GcObj,
+const GC = @This();
 
-    pub fn init(allocator: std.mem.Allocator) GC {
-        return GC{
-            .allocator = allocator,
-            .root = null,
-        };
-    }
-};
+allocator: std.mem.Allocator,
+root: *GcObj,
+
+pub fn init(allocator: std.mem.Allocator) GC {
+    return GC{
+        .allocator = allocator,
+        .root = null,
+    };
+}
