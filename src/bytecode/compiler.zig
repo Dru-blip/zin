@@ -62,6 +62,8 @@ pub fn compile(self: *Compiler) !void {
             },
         }
     }
+
+    try self.unit.addOpcode(.halt);
 }
 
 fn compileVarDecl(self: *Compiler, node: Node) !void {

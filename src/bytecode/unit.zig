@@ -11,11 +11,19 @@ pub const Opcode = enum(u8) {
     load_c,
     store,
     get,
+
     add,
     minus,
     mul,
     div,
+    modulus,
+    less,
+    greater,
+    less_equal,
+    greater_equal,
     equal,
+    nq,
+    halt,
 
     pub inline fn tokenToOpcode(tag: Tag) Opcode {
         return switch (tag) {
@@ -23,7 +31,13 @@ pub const Opcode = enum(u8) {
             .minus => Opcode.minus,
             .asterisk => Opcode.mul,
             .slash => Opcode.div,
+            .modulus => Opcode.modulus,
+            .angle_bracket_left => Opcode.less,
+            .angle_bracket_right => Opcode.greater,
+            .angle_bracket_left_equal => Opcode.less_equal,
+            .angle_bracket_right_equal => Opcode.greater_equal,
             .equal => Opcode.store,
+            .bang_equal => Opcode.nq,
             .equal_equal => Opcode.equal,
             else => unreachable,
         };
