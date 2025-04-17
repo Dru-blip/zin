@@ -10,6 +10,7 @@ pub const ExtraIndex = u32;
 pub const TokenIndex = u32;
 
 pub const Tag = enum(u8) {
+    block,
     var_decl,
     expr_stmt,
     assign,
@@ -21,19 +22,46 @@ pub const Tag = enum(u8) {
 
 const Ast = @This();
 
+/// represents a single node in abstract syntax tree
 pub const Node = struct {
+    /// type of ast node
     tag: Tag,
+
+    /// source token index
     token: TokenIndex,
+
+    /// lhs field is used in different contexts
+    /// for example binop expr lhs holds left operand,
+    /// for assign expr lhs holds identifier index or member expression,
+    /// for variable declaration lhs holds identifier index.
     lhs: ?ExtraIndex,
+
+    /// rhs field is used in different contexts
+    /// for example binop expr rhs holds right operand
+    /// for block statements rhs holds number of statements inside a block
     rhs: ?ExtraIndex,
+
+    // used for block statements
+    // which index children node start at
+    offset: ?u32,
 };
 
+/// list of ast nodes
 nodes: std.MultiArrayList(Node),
+
+/// list of extra data
 extra: std.ArrayList(ExtraIndex),
+
+/// memory allocator
 gpa: std.mem.Allocator,
+
+/// list of tokens
 tokens: *std.ArrayList(Token),
+
+/// root node index
 root: ?NodeIndex,
 
+/// initializes the ast and allocates memory for required fields
 pub fn init(gpa: std.mem.Allocator, tokens: *std.ArrayList(Token)) !Ast {
     return .{
         .nodes = std.MultiArrayList(Node){},
@@ -44,6 +72,7 @@ pub fn init(gpa: std.mem.Allocator, tokens: *std.ArrayList(Token)) !Ast {
     };
 }
 
+/// deinitializes the ast and frees all the allocated memory
 pub fn deinit(
     self: *Ast,
 ) void {
@@ -51,7 +80,7 @@ pub fn deinit(
     self.extra.deinit();
 }
 
-/// append the given node to the array and return its index
+/// append the given node to the ast and return its index
 pub fn append(
     self: *Ast,
     tag: Tag,
@@ -64,6 +93,7 @@ pub fn append(
         .token = token,
         .lhs = lhs,
         .rhs = rhs,
+        .offset = null,
     });
     const length: usize = self.nodes.len - 1;
     return @truncate(length);

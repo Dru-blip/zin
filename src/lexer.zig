@@ -371,11 +371,12 @@ pub fn printTokens(self: *Lexer) void {
 }
 
 test "punctuations" {
-    try testLexer("{}()", &.{
+    try testLexer("{}();", &.{
         .left_brace,
         .right_brace,
         .left_paren,
         .right_paren,
+        .semicolon,
     });
 }
 
@@ -383,8 +384,30 @@ test "integers" {
     try testLexer("563", &.{.integer});
 }
 
+test "operators" {
+    try testLexer("+ - * / % > < <= >= == !=", &.{
+        .plus,
+        .minus,
+        .asterisk,
+        .slash,
+        .modulus,
+        .angle_bracket_right,
+        .angle_bracket_left,
+        .angle_bracket_left_equal,
+        .angle_bracket_right_equal,
+        .equal_equal,
+        .bang_equal,
+    });
+}
+
 test "keywords" {
-    try testLexer("if else var\nvar", &.{ .keyword_if, .keyword_else, .keyword_var, .keyword_var });
+    try testLexer("if else var\nvar def", &.{
+        .keyword_if,
+        .keyword_else,
+        .keyword_var,
+        .keyword_var,
+        .keyword_def,
+    });
 }
 
 fn testLexer(source: [:0]const u8, expectedTags: []const Token.Tag) !void {
