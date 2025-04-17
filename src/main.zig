@@ -57,22 +57,17 @@ pub fn main() !void {
     // try to parse the token sequence
     try parser.parse();
 
-    // tree.printAst();
-    // try ast.printAst(&data_pool);
     var bc = Compiler.init(allocator, &tree, &data_pool, &lex.tokens);
     defer bc.deinit();
 
     try bc.compile();
 
-    // std.debug.print("number of nodes: {}\n", .{tree.nodes.len});
-    // std.debug.print("number of bytes: {}\n", .{bc.unit.code.items.len});
+    // var dis = Disassembler.init(&data_pool, &bc.unit);
 
-    var dis = Disassembler.init(&data_pool, &bc.unit);
+    // try dis.disassemble();
+    var vm = VM.init(allocator, &bc.unit);
 
-    try dis.disassemble();
-    // var vm = VM.init(allocator, &bc.unit);
+    defer vm.deinit();
 
-    // defer vm.deinit();
-
-    // try vm.run();
+    try vm.run();
 }

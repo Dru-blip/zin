@@ -88,6 +88,9 @@ fn compileExpr(self: *Compiler, index: u32) Errors!void {
         .assign => {
             try self.emitAssign(node);
         },
+        .binop => {
+            try self.emitBinOp(node);
+        },
         .int => {
             try self.emitLoadInt(node);
         },
@@ -109,6 +112,13 @@ fn emitAssign(self: *Compiler, node: Node) !void {
     }
 
     self.pos += 2;
+}
+
+fn emitBinOp(self: *Compiler, node: Node) !void {
+    try self.compileExpr(node.lhs.?);
+    try self.compileExpr(node.rhs.?);
+    try self.unit.addOpcode(Opcode.tokenToOpcode(self.tokens.items[node.token].tag));
+    self.pos += 3;
 }
 
 fn emitGetId(self: *Compiler, node: Node) !void {
