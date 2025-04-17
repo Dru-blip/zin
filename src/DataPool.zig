@@ -6,7 +6,6 @@ pub const IdentIndex = u32;
 pub const ConstIndex = u32;
 
 const Tag = enum(u3) { int, string };
-// const Value = ConstIndex;
 
 const DataPool = @This();
 

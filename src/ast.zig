@@ -6,10 +6,13 @@ const IdentIndex = DataPool.IdentIndex;
 const ConstIndex = DataPool.ConstIndex;
 
 pub const Index = u24;
-pub const TokenIndex = u24;
+pub const ExtraIndex = u32;
+pub const TokenIndex = u32;
 
 pub const Tag = enum(u8) {
     var_decl,
+    expr_stmt,
+    assign,
     binop,
     uop,
     int,
@@ -19,58 +22,62 @@ pub const Tag = enum(u8) {
 const Ast = @This();
 
 pub const Node = struct {
-    data: Data,
+    data: ?Data,
     tag: Tag,
     token: TokenIndex,
-    pub const index: Index = undefined;
 
-    pub const Data = union(Tag) {
-        var_decl: struct {
-            name: IdentIndex,
-            init: Index,
-        },
-        binop: struct {
-            lhs: Index,
-            rhs: Index,
-        },
-        uop: struct {
-            lhs: Index,
-        },
+    lhs: ?ExtraIndex,
+    rhs: ?ExtraIndex,
+
+    pub const Data = union {
+        op: TokenIndex,
         int: ConstIndex,
         id: IdentIndex,
     };
 };
 
 nodes: std.MultiArrayList(Node),
-allocator: std.mem.Allocator,
+gpa: std.mem.Allocator,
 tokens: *std.ArrayList(Token),
+root: ?Index,
 
-pub fn init(allocator: std.mem.Allocator, tokens: *std.ArrayList(Token)) !Ast {
+pub fn init(gpa: std.mem.Allocator, tokens: *std.ArrayList(Token)) !Ast {
     return .{
         .nodes = std.MultiArrayList(Node){},
-        .allocator = allocator,
+        .gpa = gpa,
         .tokens = tokens,
+        .root = null,
     };
 }
 
 pub fn deinit(
     self: *Ast,
 ) void {
-    self.nodes.deinit(self.allocator);
+    self.nodes.deinit(self.gpa);
 }
 
 /// append the given node to the array and return its index
 pub fn append(
     self: *Ast,
-    data: Node.Data,
     tag: Tag,
     token: TokenIndex,
+    data: ?Node.Data,
+    lhs: ?ExtraIndex,
+    rhs: ?ExtraIndex,
 ) !Index {
-    try self.nodes.append(self.allocator, .{
+    try self.nodes.append(self.gpa, .{
         .data = data,
         .tag = tag,
         .token = token,
+        .lhs = lhs,
+        .rhs = rhs,
     });
     const length: usize = self.nodes.len - 1;
     return @truncate(length);
+}
+
+pub fn printAst(self: *Ast) void {
+    for (self.nodes.items(.tag)) |tag| {
+        std.debug.print("{}\n", .{tag});
+    }
 }

@@ -37,6 +37,7 @@ const Error = struct {
 const State = enum {
     start,
     var_decl,
+    expr_stmt,
 };
 
 /// initialize a new parser with allocator
@@ -65,6 +66,7 @@ fn advance(self: *Parser) void {
 
 inline fn getPrecedence(_: *Parser, tag: Token.Tag) ?u4 {
     return switch (tag) {
+        .equal => 1,
         .plus, .minus => 2,
         .asterisk, .slash => 3,
         else => null,
@@ -116,6 +118,15 @@ fn eat(self: *Parser, tag: Token.Tag) SyntaxError!void {
 
 /// top level parse function
 pub fn parse(self: *Parser) !void {
+    var total_nodes: u32 = 0;
+
+    // var module_data: Node.Data = .{
+    //     .module = .{
+    //         .start = 0,
+    //         .total_nodes = total_nodes,
+    //     },
+    // };
+
     // parse until eof token is hit
     loop: while (self.current_token.tag != .eof) {
         state: switch (State.start) {
@@ -123,47 +134,62 @@ pub fn parse(self: *Parser) !void {
                 switch (self.current_token.tag) {
                     .keyword_var => continue :state .var_decl,
                     else => {
-                        std.debug.print("{}\n", .{self.current_token});
-                        return SyntaxError.UnexpectedToken;
+                        continue :state .expr_stmt;
                     },
                 }
             },
             .var_decl => {
-                self.varDecl() catch {
+                _ = self.pVarDecl() catch {
+                    self.printError();
+                    break :loop;
+                };
+            },
+            .expr_stmt => {
+                _ = self.pExprStmt() catch {
                     self.printError();
                     break :loop;
                 };
             },
         }
+        // if (total_nodes == 0) {
+        // module_data.module.start = @intCast(self.tree.nodes.len - 1);
+        // }
+        total_nodes += 1;
     }
+
+    // module_data.module.total_nodes = total_nodes;
+    // self.tree.root = try self.tree.append(module_data, .module, 0);
 }
 
-fn varDecl(self: *Parser) !void {
+fn pVarDecl(self: *Parser) !void {
     try self.eat(.keyword_var);
     const pos = self.position;
     const id = self.tokens.items[pos];
     try self.eat(.id);
     try self.eat(.equal);
 
-    const initializer = try self.expr(1);
     const ind = try self.data_pool.addIdent(self.source[id.start..id.end]);
-    const data: Node.Data = .{
-        .var_decl = .{
-            .name = ind,
-            .init = initializer,
-        },
-    };
-    _ = try self.tree.append(
-        data,
-        .var_decl,
-        pos,
-    );
+
+    const varDecl = try self.tree.append(.var_decl, pos, null, ind, null);
+
+    const initializer = try self.pExpr(1);
+
+    try self.setVarDeclInit(varDecl, initializer);
+}
+
+fn pExprStmt(self: *Parser) !void {
+    const expr_index = try self.tree.append(.expr_stmt, self.position - 1, null, null, null);
+
+    const ind = try self.pExpr(0);
+
+    const expr = &self.tree.nodes.items(.lhs)[expr_index];
+    expr.* = ind;
 }
 
 fn prefix(self: *Parser, tag: Token.Tag) Errors!Index {
     switch (tag) {
-        .id => return try self.identifier(),
-        .integer => return try self.int(),
+        .id => return try self.pIdentifier(),
+        .integer => return try self.pInteger(),
         else => {
             self.recordError(.id);
             return SyntaxError.UnexpectedToken;
@@ -176,11 +202,11 @@ fn infix(self: *Parser, op_index: TokenIndex) Errors!?Index {
     if (prec == null) {
         return null;
     }
-    return try self.expr(prec.? - 1);
+    return try self.pExpr(prec.? - 1);
 }
 
 /// parse expression
-fn expr(self: *Parser, precedence: u4) Errors!Index {
+fn pExpr(self: *Parser, precedence: u4) Errors!Index {
     var left = try self.prefix(self.current_token.tag);
 
     while (true) {
@@ -195,22 +221,28 @@ fn expr(self: *Parser, precedence: u4) Errors!Index {
         self.advance();
 
         const right = try self.infix(op) orelse break;
+
+        if (token.tag == .equal) {
+            left = try self.tree.append(.assign, op, .{
+                .op = op,
+            }, left, right);
+            continue;
+        }
         left = try self.tree.append(
-            .{
-                .binop = .{
-                    .lhs = left,
-                    .rhs = right,
-                },
-            },
             .binop,
             op,
+            .{
+                .op = op,
+            },
+            left,
+            right,
         );
     }
 
     return left;
 }
 
-fn identifier(self: *Parser) Errors!Index {
+fn pIdentifier(self: *Parser) Errors!Index {
     // get the current token
     const token = self.current_token;
     // if token is not an identifier, return unexpected token error
@@ -225,9 +257,11 @@ fn identifier(self: *Parser) Errors!Index {
     const pool_ind = try self.data_pool.addIdent(value);
     // append the identifier node to the ast array
     const index = try self.tree.append(
-        .{ .id = pool_ind },
         .id,
         self.position,
+        .{ .id = pool_ind },
+        null,
+        null,
     );
     // move to the next token
     self.advance();
@@ -237,7 +271,7 @@ fn identifier(self: *Parser) Errors!Index {
 }
 
 /// parse integer token
-fn int(self: *Parser) Errors!Index {
+fn pInteger(self: *Parser) Errors!Index {
     // get the current token
     const token = self.current_token;
     // if token is not an integer, return unexpected token error
@@ -251,14 +285,20 @@ fn int(self: *Parser) Errors!Index {
 
     const pool_ind = try self.data_pool.addInt(value);
     // append the integer node to the ast array
-    const index = try self.tree.append(
-        .{ .int = pool_ind },
-        .int,
-        self.position,
-    );
+    // const index = try self.tree.append(
+    //     .{ .int = pool_ind },
+    //     .int,
+    //     self.position,
+    // );
+    const index = try self.tree.append(.int, self.position, .{ .int = pool_ind }, null, null);
     // move to the next token
     self.advance();
 
     // return the index of the integer node
     return index;
+}
+
+inline fn setVarDeclInit(self: *Parser, varDecl: Index, initializer: Index) !void {
+    const s = &self.tree.nodes.items(.rhs)[varDecl];
+    s.* = initializer;
 }
