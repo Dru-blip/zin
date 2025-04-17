@@ -2,7 +2,8 @@ const std = @import("std");
 const Ast = @import("ast.zig");
 const DataPool = @import("DataPool.zig");
 const Token = @import("lexer.zig").Token;
-const Index = Ast.Index;
+const NodeIndex = Ast.NodeIndex;
+const ExtraIndex = Ast.ExtraIndex;
 
 const TokenIndex = Ast.TokenIndex;
 const Node = Ast.Node;
@@ -62,6 +63,12 @@ fn advance(self: *Parser) void {
         self.position += 1;
         self.current_token = self.tokens.items[self.position];
     }
+}
+
+fn addExtra(self: *Parser, data: ExtraIndex) !ExtraIndex {
+    const ind: u32 = @truncate(self.tree.extra.items.len);
+    try self.tree.extra.append(data);
+    return ind;
 }
 
 inline fn getPrecedence(_: *Parser, tag: Token.Tag) ?u4 {
@@ -170,7 +177,7 @@ fn pVarDecl(self: *Parser) !void {
 
     const ind = try self.data_pool.addIdent(self.source[id.start..id.end]);
 
-    const varDecl = try self.tree.append(.var_decl, pos, null, ind, null);
+    const varDecl = try self.tree.append(.var_decl, pos, ind, null);
 
     const initializer = try self.pExpr(1);
 
@@ -178,7 +185,7 @@ fn pVarDecl(self: *Parser) !void {
 }
 
 fn pExprStmt(self: *Parser) !void {
-    const expr_index = try self.tree.append(.expr_stmt, self.position - 1, null, null, null);
+    const expr_index = try self.tree.append(.expr_stmt, self.position, null, null);
 
     const ind = try self.pExpr(0);
 
@@ -186,7 +193,7 @@ fn pExprStmt(self: *Parser) !void {
     expr.* = ind;
 }
 
-fn prefix(self: *Parser, tag: Token.Tag) Errors!Index {
+fn prefix(self: *Parser, tag: Token.Tag) Errors!NodeIndex {
     switch (tag) {
         .id => return try self.pIdentifier(),
         .integer => return try self.pInteger(),
@@ -197,7 +204,7 @@ fn prefix(self: *Parser, tag: Token.Tag) Errors!Index {
     }
 }
 
-fn infix(self: *Parser, op_index: TokenIndex) Errors!?Index {
+fn infix(self: *Parser, op_index: TokenIndex) Errors!?NodeIndex {
     const prec = self.getPrecedence(self.tokens.items[op_index].tag);
     if (prec == null) {
         return null;
@@ -206,7 +213,7 @@ fn infix(self: *Parser, op_index: TokenIndex) Errors!?Index {
 }
 
 /// parse expression
-fn pExpr(self: *Parser, precedence: u4) Errors!Index {
+fn pExpr(self: *Parser, precedence: u4) Errors!NodeIndex {
     var left = try self.prefix(self.current_token.tag);
 
     while (true) {
@@ -223,17 +230,12 @@ fn pExpr(self: *Parser, precedence: u4) Errors!Index {
         const right = try self.infix(op) orelse break;
 
         if (token.tag == .equal) {
-            left = try self.tree.append(.assign, op, .{
-                .op = op,
-            }, left, right);
+            left = try self.tree.append(.assign, op, left, right);
             continue;
         }
         left = try self.tree.append(
             .binop,
             op,
-            .{
-                .op = op,
-            },
             left,
             right,
         );
@@ -242,7 +244,7 @@ fn pExpr(self: *Parser, precedence: u4) Errors!Index {
     return left;
 }
 
-fn pIdentifier(self: *Parser) Errors!Index {
+fn pIdentifier(self: *Parser) Errors!NodeIndex {
     // get the current token
     const token = self.current_token;
     // if token is not an identifier, return unexpected token error
@@ -259,8 +261,7 @@ fn pIdentifier(self: *Parser) Errors!Index {
     const index = try self.tree.append(
         .id,
         self.position,
-        .{ .id = pool_ind },
-        null,
+        try self.addExtra(pool_ind),
         null,
     );
     // move to the next token
@@ -271,7 +272,7 @@ fn pIdentifier(self: *Parser) Errors!Index {
 }
 
 /// parse integer token
-fn pInteger(self: *Parser) Errors!Index {
+fn pInteger(self: *Parser) Errors!NodeIndex {
     // get the current token
     const token = self.current_token;
     // if token is not an integer, return unexpected token error
@@ -290,7 +291,7 @@ fn pInteger(self: *Parser) Errors!Index {
     //     .int,
     //     self.position,
     // );
-    const index = try self.tree.append(.int, self.position, .{ .int = pool_ind }, null, null);
+    const index = try self.tree.append(.int, self.position, try self.addExtra(pool_ind), null);
     // move to the next token
     self.advance();
 
@@ -298,7 +299,7 @@ fn pInteger(self: *Parser) Errors!Index {
     return index;
 }
 
-inline fn setVarDeclInit(self: *Parser, varDecl: Index, initializer: Index) !void {
+inline fn setVarDeclInit(self: *Parser, varDecl: NodeIndex, initializer: NodeIndex) !void {
     const s = &self.tree.nodes.items(.rhs)[varDecl];
     s.* = initializer;
 }

@@ -8,6 +8,8 @@ const Node = Ast.Node;
 const TokenIndex = Ast.TokenIndex;
 const Token = @import("../lexer.zig").Token;
 
+const Errors = (std.mem.Allocator.Error || std.fmt.ParseIntError);
+
 const Opcode = Unit.Opcode;
 
 tree: *Ast,
@@ -63,12 +65,11 @@ pub fn compile(self: *Compiler) !void {
 }
 
 fn compileVarDecl(self: *Compiler, node: Node) !void {
+    self.pos += 1;
     try self.compileExpr(node.rhs.?);
-
     try self.unit.addOpcode(.store);
     const bytes = try splitIntoBytes(node.lhs.?);
     try self.unit.add(bytes);
-    self.pos += 1;
 }
 
 fn compileExprStmt(self: *Compiler, node: Node) !void {
@@ -80,18 +81,12 @@ fn compileExprStmt(self: *Compiler, node: Node) !void {
     // try self.unit.add(bytes);
 }
 
-fn compileExpr(self: *Compiler, index: u32) !void {
+fn compileExpr(self: *Compiler, index: u32) Errors!void {
     const node = self.tree.nodes.get(index);
 
     switch (node.tag) {
         .assign => {
-            try self.compileExpr(node.rhs.?);
-            try self.unit.addOpcode(.store);
-
-            try self.compileExpr(node.lhs.?);
-            // const bytes = try splitIntoBytes(node.lhs.?);
-            // try self.unit.add(bytes);
-            self.pos += 2;
+            try self.emitAssign(node);
         },
         .int => {
             try self.emitLoadInt(node);
@@ -103,23 +98,24 @@ fn compileExpr(self: *Compiler, index: u32) !void {
     }
 }
 
-// fn emitAssign(self: *Compiler, data: Node.Data) !void {
-//     // try self.unit.addOpcode(.store);
+fn emitAssign(self: *Compiler, node: Node) !void {
+    try self.compileExpr(node.rhs.?);
+    const target = self.tree.nodes.get(node.lhs.?);
 
-//     // const bytes = try splitIntoBytes(data.assign.);
+    if (target.tag == .id) {
+        try self.unit.addOpcode(.store);
+        const bytes = try splitIntoBytes(target.lhs.?);
+        try self.unit.add(bytes);
+    }
 
-//     // const bytes = try splitIntoBytes();
-//     // try self.unit.add(bytes);
-// }
-
-// fn emitBinOp(self: *Compiler, node: Node) !void {
-//     const operator = node.data.?.binop.operator;
-//     try self.unit.addOpcode(Opcode.tokenToOpcode(operator));
-// }
+    self.pos += 2;
+}
 
 fn emitGetId(self: *Compiler, node: Node) !void {
     try self.unit.addOpcode(.get);
-    const bytes = try splitIntoBytes(node.data.?.id);
+    const ind = self.tree.extra.items[node.lhs.?];
+    // std.debug.print("{}\n", .{ind});
+    const bytes = try splitIntoBytes(ind);
     try self.unit.add(bytes);
     self.pos += 1;
 }
@@ -128,7 +124,9 @@ fn emitGetId(self: *Compiler, node: Node) !void {
 /// along with index of int literal.
 fn emitLoadInt(self: *Compiler, node: Node) !void {
     try self.unit.addOpcode(.load_i);
-    const bytes = try splitIntoBytes(node.data.?.int);
+    const ind = self.tree.extra.items[node.lhs.?];
+    // std.debug.print("{}\n", .{ind});
+    const bytes = try splitIntoBytes(ind);
     try self.unit.add(bytes);
     self.pos += 1;
 }

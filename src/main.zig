@@ -59,16 +59,17 @@ pub fn main() !void {
 
     // tree.printAst();
     // try ast.printAst(&data_pool);
-    // var bc = Compiler.init(allocator, &tree, &data_pool, &lex.tokens);
-    // defer bc.deinit();
+    var bc = Compiler.init(allocator, &tree, &data_pool, &lex.tokens);
+    defer bc.deinit();
 
-    // try bc.compile();
+    try bc.compile();
 
-    // std.debug.print("{}\n", .{bc.unit.code.items.len});
+    // std.debug.print("number of nodes: {}\n", .{tree.nodes.len});
+    // std.debug.print("number of bytes: {}\n", .{bc.unit.code.items.len});
 
-    // var dis = Disassembler.init(&data_pool, &bc.unit);
+    var dis = Disassembler.init(&data_pool, &bc.unit);
 
-    // try dis.disassemble();
+    try dis.disassemble();
     // var vm = VM.init(allocator, &bc.unit);
 
     // defer vm.deinit();
