@@ -100,6 +100,64 @@ pub fn run(self: *VM) !void {
                     },
                 });
             },
+            .modulus => {
+                const a = self.stack.pop();
+                const b = self.stack.pop();
+                self.ip += 1;
+                try self.stack.append(.{
+                    .tag = .int,
+                    .data = .{
+                        .int = @mod(a.?.data.int, b.?.data.int),
+                    },
+                });
+            },
+            .equal => {
+                const a = self.stack.pop();
+                const b = self.stack.pop();
+                self.ip += 1;
+                try self.stack.append(.{
+                    .tag = .bool,
+                    .data = .{
+                        .bool = a.?.data.int == b.?.data.int,
+                    },
+                });
+            },
+            .greater => {
+                const a = self.stack.pop();
+                const b = self.stack.pop();
+                self.ip += 1;
+                try self.stack.append(.{
+                    .tag = .bool,
+                    .data = .{
+                        .bool = a.?.data.int > b.?.data.int,
+                    },
+                });
+            },
+            .less => {
+                const a = self.stack.pop();
+                const b = self.stack.pop();
+                self.ip += 1;
+                try self.stack.append(.{
+                    .tag = .bool,
+                    .data = .{
+                        .bool = a.?.data.int < b.?.data.int,
+                    },
+                });
+            },
+            .nq => {
+                const a = self.stack.pop();
+                const b = self.stack.pop();
+                self.ip += 1;
+                try self.stack.append(.{
+                    .tag = .bool,
+                    .data = .{
+                        .bool = a.?.data.int != b.?.data.int,
+                    },
+                });
+            },
+            .halt => {
+                break;
+            },
             else => {
                 std.debug.print("unknown opcode: {}\n", .{op});
                 break;
