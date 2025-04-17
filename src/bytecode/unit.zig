@@ -15,6 +15,7 @@ pub const Opcode = enum(u8) {
     minus,
     mul,
     div,
+    equal,
 
     pub inline fn tokenToOpcode(tag: Tag) Opcode {
         return switch (tag) {
@@ -23,6 +24,7 @@ pub const Opcode = enum(u8) {
             .asterisk => Opcode.mul,
             .slash => Opcode.div,
             .equal => Opcode.store,
+            .equal_equal => Opcode.equal,
             else => unreachable,
         };
     }

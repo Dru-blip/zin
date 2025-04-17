@@ -89,7 +89,19 @@ pub fn run(self: *VM) !void {
                     },
                 });
             },
+            .div => {
+                const a = self.stack.pop();
+                const b = self.stack.pop();
+                self.ip += 1;
+                try self.stack.append(.{
+                    .tag = .int,
+                    .data = .{
+                        .int = @divTrunc(a.?.data.int, b.?.data.int),
+                    },
+                });
+            },
             else => {
+                std.debug.print("unknown opcode: {}\n", .{op});
                 break;
             },
         }

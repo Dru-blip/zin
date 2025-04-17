@@ -16,6 +16,7 @@ const SyntaxError = error{
     ExpectedVar,
     ExpectedIdentifier,
     ExpectedInteger,
+    ExpectedSemicolon,
 };
 
 const Errors = (std.mem.Allocator.Error || SyntaxError || std.fmt.ParseIntError);
@@ -74,8 +75,14 @@ fn addExtra(self: *Parser, data: ExtraIndex) !ExtraIndex {
 inline fn getPrecedence(_: *Parser, tag: Token.Tag) ?u4 {
     return switch (tag) {
         .equal => 1,
-        .plus, .minus => 2,
-        .asterisk, .slash => 3,
+        .bang_equal, .equal_equal => 4,
+        .angle_bracket_left,
+        .angle_bracket_right,
+        .angle_bracket_left_equal,
+        .angle_bracket_right_equal,
+        => 5,
+        .plus, .minus => 8,
+        .asterisk, .slash, .modulus => 9,
         else => null,
     };
 }
@@ -84,6 +91,9 @@ fn tagToError(_: *Parser, tag: Token.Tag) SyntaxError {
     switch (tag) {
         .keyword_var => {
             return SyntaxError.ExpectedVar;
+        },
+        .semicolon => {
+            return SyntaxError.ExpectedSemicolon;
         },
         else => {
             return SyntaxError.UnexpectedToken;
@@ -100,6 +110,10 @@ fn recordError(self: *Parser, tag: Token.Tag) void {
     };
 }
 
+// fn recoverOrExit(self: *Parser) void {
+
+// }
+
 fn printError(self: *Parser) void {
     const err_info = self.err.?;
     const found = Token.tagToLabel(err_info.found);
@@ -113,6 +127,10 @@ fn printError(self: *Parser) void {
         expected,
     });
     // std.debug.print("{s}\n", .{found});
+}
+
+fn expectSemicolon(self: *Parser) !void {
+    try self.eat(.semicolon);
 }
 
 fn eat(self: *Parser, tag: Token.Tag) SyntaxError!void {
@@ -181,6 +199,8 @@ fn pVarDecl(self: *Parser) !void {
 
     const initializer = try self.pExpr(1);
 
+    try self.expectSemicolon();
+
     try self.setVarDeclInit(varDecl, initializer);
 }
 
@@ -188,6 +208,8 @@ fn pExprStmt(self: *Parser) !void {
     const expr_index = try self.tree.append(.expr_stmt, self.position, null, null);
 
     const ind = try self.pExpr(0);
+
+    try self.expectSemicolon();
 
     const expr = &self.tree.nodes.items(.lhs)[expr_index];
     expr.* = ind;
@@ -209,7 +231,7 @@ fn infix(self: *Parser, op_index: TokenIndex) Errors!?NodeIndex {
     if (prec == null) {
         return null;
     }
-    return try self.pExpr(prec.? - 1);
+    return try self.pExpr(prec.?);
 }
 
 /// parse expression

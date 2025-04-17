@@ -41,6 +41,8 @@ pub fn main() !void {
     // fill the lexer with tokens
     try lex.tokenize();
 
+    // lex.printTokens();
+
     var data_pool = DataPool.init(allocator);
 
     defer data_pool.deinit();

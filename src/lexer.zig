@@ -33,6 +33,7 @@ pub const Token = struct {
         minus,
         plus,
         slash,
+        modulus,
         asterisk,
         bang,
         equal,
@@ -95,6 +96,7 @@ pub const Token = struct {
             .minus => "-",
             .plus => "+",
             .slash => "/",
+            .modulus => "%",
             .asterisk => "*",
             .bang => "!",
             .bang_equal => "!=",
@@ -142,10 +144,10 @@ const State = enum {
     // minus,
     // star,
     // asterisk,
-    // bang,
-    // equal,
-    // angle_bracket_left,
-    // angle_bracket_right,
+    bang,
+    equal,
+    angle_bracket_left,
+    angle_bracket_right,
     // dot,
 };
 
@@ -234,16 +236,45 @@ fn next(self: *Lexer) Token {
                     self.position += 1;
                     self.col += 1;
                     token.tag = .equal;
+                    continue :state .equal;
+                },
+                '!' => {
+                    self.position += 1;
+                    self.col += 1;
+                    token.tag = .bang;
+                    continue :state .bang;
+                },
+                '<' => {
+                    self.position += 1;
+                    self.col += 1;
+                    token.tag = .angle_bracket_left;
+                    continue :state .angle_bracket_left;
+                },
+                '>' => {
+                    self.position += 1;
+                    self.col += 1;
+                    token.tag = .angle_bracket_right;
+                    continue :state .angle_bracket_right;
                 },
                 '+' => {
                     self.position += 1;
                     self.col += 1;
                     token.tag = .plus;
                 },
+                '%' => {
+                    self.position += 1;
+                    self.col += 1;
+                    token.tag = .modulus;
+                },
                 '-' => {
                     self.position += 1;
                     self.col += 1;
                     token.tag = .minus;
+                },
+                ';' => {
+                    self.position += 1;
+                    self.col += 1;
+                    token.tag = .semicolon;
                 },
                 '*' => {
                     self.position += 1;
@@ -258,7 +289,9 @@ fn next(self: *Lexer) Token {
                 else => {
                     token.end = self.position;
                     token.tag = .invalid;
-                    return token;
+                    // return token
+                    std.debug.print("unexpected character: {}\n", .{self.input[self.position]});
+                    std.process.exit(1);
                 },
             }
         },
@@ -280,6 +313,34 @@ fn next(self: *Lexer) Token {
                     continue :state .integer;
                 },
                 else => {},
+            }
+        },
+        .equal => {
+            if (self.input[self.position] == '=') {
+                self.position += 1;
+                self.col += 1;
+                token.tag = .equal_equal;
+            }
+        },
+        .bang => {
+            if (self.input[self.position] == '=') {
+                self.position += 1;
+                self.col += 1;
+                token.tag = .bang_equal;
+            }
+        },
+        .angle_bracket_left => {
+            if (self.input[self.position] == '=') {
+                self.position += 1;
+                self.col += 1;
+                token.tag = .angle_bracket_left_equal;
+            }
+        },
+        .angle_bracket_right => {
+            if (self.input[self.position] == '=') {
+                self.position += 1;
+                self.col += 1;
+                token.tag = .angle_bracket_right_equal;
             }
         },
     }
