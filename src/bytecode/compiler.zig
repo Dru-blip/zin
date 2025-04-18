@@ -13,7 +13,6 @@ const Errors = (std.mem.Allocator.Error || std.fmt.ParseIntError);
 const Opcode = Unit.Opcode;
 
 tree: *Ast,
-position: u32,
 unit: Unit,
 tokens: *std.ArrayList(Token),
 pos: usize,
@@ -28,7 +27,6 @@ pub fn init(
 ) Compiler {
     return .{
         .tree = tree,
-        .position = 0,
         .unit = try Unit.init(allocator, data_pool),
         .tokens = tokens,
         .pos = 0,
@@ -50,24 +48,60 @@ inline fn splitIntoBytes(value: u32) ![]const u8 {
 }
 
 pub fn compile(self: *Compiler) !void {
-    while (self.pos < self.tree.nodes.len) {
-        const node = self.tree.nodes.get(self.pos);
+    const module = self.tree.nodes.get(self.tree.root.?);
+    const total_stmts = module.rhs.?;
+    const start_pos: u32 = module.offset.?;
+    var i: u32 = 0;
+    var index: ?u32 = start_pos + i;
+    while (i < total_stmts and index != null) {
+        const node = self.tree.nodes.get(@as(usize, index.?));
         switch (node.tag) {
-            .var_decl => try self.compileVarDecl(node),
-            // .assign => try self.emitAssign(data),
-            // .binop => try self.emitBinOp(node.token),
-            .expr_stmt => try self.compileExprStmt(node),
+            .var_decl,
+            .expr_stmt,
+            .block,
+            => {
+                try self.compileStmt(node);
+                index = node.next_stmt;
+            },
             else => {
-                break;
+                std.debug.print("Unexpected node type: {}\n", .{node.tag});
+                std.process.exit(1);
             },
         }
+        i += 1;
     }
 
     try self.unit.addOpcode(.halt);
 }
 
+fn compileStmt(self: *Compiler, node: Node) Errors!void {
+    return switch (node.tag) {
+        .block => try self.compileBlock(node),
+        .expr_stmt => try self.compileExprStmt(node),
+        .var_decl => try self.compileVarDecl(node),
+        else => {
+            std.debug.print("Unexpected node type: {}\n", .{self.pos});
+            std.process.exit(1);
+        },
+    };
+}
+
+fn compileBlock(self: *Compiler, node: Node) !void {
+    const total_stmts = node.rhs.?;
+    const start_pos = node.offset.?;
+
+    var i: u32 = 0;
+    const index: ?u32 = start_pos + i;
+    var next_stmt: ?u32 = index;
+    while (i < total_stmts and next_stmt != null) {
+        const stmt = self.tree.nodes.get(@as(usize, next_stmt.?));
+        try self.compileStmt(stmt);
+        next_stmt = stmt.next_stmt;
+        i += 1;
+    }
+}
+
 fn compileVarDecl(self: *Compiler, node: Node) !void {
-    self.pos += 1;
     try self.compileExpr(node.rhs.?);
     try self.unit.addOpcode(.store);
     const bytes = try splitIntoBytes(node.lhs.?);
@@ -76,8 +110,7 @@ fn compileVarDecl(self: *Compiler, node: Node) !void {
 
 fn compileExprStmt(self: *Compiler, node: Node) !void {
     // std.debug.print("{} {}\n", .{ node.id, node.tag });
-    self.pos += 1;
-    try self.compileExpr(node.lhs.?);
+    return try self.compileExpr(node.lhs.?);
     // try self.unit.addOpcode(.expr_stmt);
     // const bytes = try splitIntoBytes(node.expr_stmt.expr);
     // try self.unit.add(bytes);
@@ -109,18 +142,15 @@ fn emitAssign(self: *Compiler, node: Node) !void {
 
     if (target.tag == .id) {
         try self.unit.addOpcode(.store);
-        const bytes = try splitIntoBytes(target.lhs.?);
+        const bytes = try splitIntoBytes(self.tree.extra.items[target.lhs.?]);
         try self.unit.add(bytes);
     }
-
-    self.pos += 2;
 }
 
 fn emitBinOp(self: *Compiler, node: Node) !void {
     try self.compileExpr(node.lhs.?);
     try self.compileExpr(node.rhs.?);
     try self.unit.addOpcode(Opcode.tokenToOpcode(self.tokens.items[node.token].tag));
-    self.pos += 3;
 }
 
 fn emitGetId(self: *Compiler, node: Node) !void {
@@ -129,7 +159,6 @@ fn emitGetId(self: *Compiler, node: Node) !void {
     // std.debug.print("{}\n", .{ind});
     const bytes = try splitIntoBytes(ind);
     try self.unit.add(bytes);
-    self.pos += 1;
 }
 
 /// Emit a load integer instruction,
@@ -140,5 +169,4 @@ fn emitLoadInt(self: *Compiler, node: Node) !void {
     // std.debug.print("{}\n", .{ind});
     const bytes = try splitIntoBytes(ind);
     try self.unit.add(bytes);
-    self.pos += 1;
 }

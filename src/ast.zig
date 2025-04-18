@@ -10,6 +10,7 @@ pub const ExtraIndex = u32;
 pub const TokenIndex = u32;
 
 pub const Tag = enum(u8) {
+    module,
     block,
     var_decl,
     expr_stmt,
@@ -38,12 +39,14 @@ pub const Node = struct {
 
     /// rhs field is used in different contexts
     /// for example binop expr rhs holds right operand
-    /// for block statements rhs holds number of statements inside a block
+    /// for block statements rhs holds number of statements inside a block.
     rhs: ?ExtraIndex,
 
     // used for block statements
     // which index children node start at
     offset: ?u32,
+
+    next_stmt: ?NodeIndex,
 };
 
 /// list of ast nodes
@@ -94,6 +97,7 @@ pub fn append(
         .lhs = lhs,
         .rhs = rhs,
         .offset = null,
+        .next_stmt = null,
     });
     const length: usize = self.nodes.len - 1;
     return @truncate(length);

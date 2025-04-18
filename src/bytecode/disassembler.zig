@@ -25,7 +25,8 @@ inline fn combineBytes(value: []const u8) u32 {
 
 pub fn disassemble(self: *Disassembler) !void {
     const writer = std.io.getStdOut().writer();
-    while (self.ip < self.unit.code.items.len) {
+    var stop: bool = false;
+    while (self.ip < self.unit.code.items.len and !stop) {
         const value = self.unit.code.items[self.ip];
         const tag: Opcode = @enumFromInt(value);
         switch (tag) {
@@ -77,6 +78,11 @@ pub fn disassemble(self: *Disassembler) !void {
             .div => {
                 try writer.print("0x{x:0>4} div\n", .{value});
                 self.ip += 1;
+            },
+            .halt => {
+                try writer.print("0x{x:0>4} halt\n", .{value});
+                self.ip += 1;
+                stop = true;
             },
             else => {
                 std.debug.print("Unknown opcode: {}\n", .{tag});

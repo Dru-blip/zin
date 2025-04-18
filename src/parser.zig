@@ -146,13 +146,8 @@ fn eat(self: *Parser, tag: Token.Tag) SyntaxError!void {
 pub fn parse(self: *Parser) !void {
     var total_nodes: u32 = 0;
 
-    // var module_data: Node.Data = .{
-    //     .module = .{
-    //         .start = 0,
-    //         .total_nodes = total_nodes,
-    //     },
-    // };
-
+    const mod_index = try self.tree.append(.module, 0, null, null);
+    var next_stmt: ?NodeIndex = null;
     // parse until eof token is hit
     loop: while (self.current_token.tag != .eof) {
         state: switch (State.start) {
@@ -167,22 +162,29 @@ pub fn parse(self: *Parser) !void {
                 }
             },
             .var_decl => {
-                _ = self.pVarDecl() catch {
+                const ind = self.pVarDecl() catch {
                     self.printError();
                     break :loop;
                 };
+                if (next_stmt != null) self.setNextStmt(next_stmt.?, ind);
+                next_stmt = ind;
             },
             .expr_stmt => {
-                _ = self.pExprStmt() catch {
+                const ind = self.pExprStmt() catch {
                     self.printError();
                     break :loop;
                 };
+
+                if (next_stmt != null) self.setNextStmt(next_stmt.?, ind);
+                next_stmt = ind;
             },
             .block => {
-                _ = self.pBlock() catch {
+                const ind = self.pBlock() catch {
                     self.printError();
                     break :loop;
                 };
+                if (next_stmt != null) self.setNextStmt(next_stmt.?, ind);
+                next_stmt = ind;
             },
         }
         // if (total_nodes == 0) {
@@ -190,32 +192,31 @@ pub fn parse(self: *Parser) !void {
         // }
         total_nodes += 1;
     }
-
-    // module_data.module.total_nodes = total_nodes;
-    // self.tree.root = try self.tree.append(module_data, .module, 0);
+    self.tree.root = mod_index;
+    self.finishModule(mod_index, total_nodes);
 }
 
-fn pStmt(self: *Parser) !void {
+fn pStmt(self: *Parser) !NodeIndex {
     switch (self.current_token.tag) {
         .keyword_var => {
-            _ = self.pVarDecl() catch {
+            return self.pVarDecl() catch {
                 self.printError();
                 std.process.exit(1);
             };
         },
         .left_brace => {
-            _ = self.pBlock() catch {
+            return self.pBlock() catch {
                 self.printError();
                 std.process.exit(1);
             };
         },
         else => {
-            try self.pExprStmt();
+            return try self.pExprStmt();
         },
     }
 }
 
-fn pBlock(self: *Parser) Errors!void {
+fn pBlock(self: *Parser) Errors!NodeIndex {
     try self.eat(.left_brace);
 
     const block_ind = try self.tree.append(.block, self.position, null, null);
@@ -223,22 +224,27 @@ fn pBlock(self: *Parser) Errors!void {
     const block_start: u32 = @intCast(self.tree.nodes.len);
     var total_stmts: u32 = 0;
     var eof: bool = false;
-    while (self.current_token.tag != .right_brace) {
-        self.pStmt() catch |err| {
+    var next_stmt: ?NodeIndex = null;
+    block_loop: while (self.current_token.tag != .right_brace) {
+        if (self.pStmt()) |ind| {
+            if (next_stmt != null) self.setNextStmt(next_stmt.?, ind);
+            next_stmt = ind;
+        } else |err| {
             if (err == SyntaxError.UnexpectedEndOfFile) {
                 eof = true;
-                break;
+                break :block_loop;
             }
-        };
+        }
+
         total_stmts += 1;
     }
 
     try self.eat(.right_brace);
-
-    try self.finishBlock(block_ind, block_start, total_stmts);
+    self.finishBlock(block_ind, block_start, total_stmts);
+    return block_ind;
 }
 
-fn pVarDecl(self: *Parser) !void {
+fn pVarDecl(self: *Parser) !NodeIndex {
     try self.eat(.keyword_var);
     const pos = self.position;
     const id = self.tokens.items[pos];
@@ -249,14 +255,15 @@ fn pVarDecl(self: *Parser) !void {
 
     const varDecl = try self.tree.append(.var_decl, pos, ind, null);
 
-    const initializer = try self.pExpr(1);
+    const initializer = try self.pExpr(0);
 
     try self.expectSemicolon();
 
-    try self.setVarDeclInit(varDecl, initializer);
+    self.setVarDeclInit(varDecl, initializer);
+    return varDecl;
 }
 
-fn pExprStmt(self: *Parser) !void {
+fn pExprStmt(self: *Parser) !NodeIndex {
     if (self.current_token.tag == .eof) {
         return SyntaxError.UnexpectedEndOfFile;
     }
@@ -268,6 +275,7 @@ fn pExprStmt(self: *Parser) !void {
 
     const expr = &self.tree.nodes.items(.lhs)[expr_index];
     expr.* = ind;
+    return expr_index;
 }
 
 fn prefix(self: *Parser, tag: Token.Tag) Errors!NodeIndex {
@@ -376,9 +384,23 @@ fn pInteger(self: *Parser) Errors!NodeIndex {
     return index;
 }
 
-inline fn setVarDeclInit(self: *Parser, varDecl: NodeIndex, initializer: NodeIndex) !void {
+inline fn setNextStmt(self: *Parser, stmt: NodeIndex, next_stmt: NodeIndex) void {
+    const s = &self.tree.nodes.items(.next_stmt)[stmt];
+    s.* = next_stmt;
+}
+
+inline fn setVarDeclInit(self: *Parser, varDecl: NodeIndex, initializer: NodeIndex) void {
     const s = &self.tree.nodes.items(.rhs)[varDecl];
     s.* = initializer;
+}
+
+inline fn finishModule(self: *Parser, module_index: NodeIndex, total_stmts: u32) void {
+    // const module = &self.tree.nodes.items(.rhs)[module_index];
+    const total = &self.tree.nodes.items(.rhs)[module_index];
+    const offset = &self.tree.nodes.items(.offset)[module_index];
+
+    total.* = total_stmts;
+    offset.* = 1;
 }
 
 inline fn finishBlock(
@@ -386,7 +408,7 @@ inline fn finishBlock(
     block_index: NodeIndex,
     offset: NodeIndex,
     total_blocks: u32,
-) !void {
+) void {
     const block = &self.tree.nodes.items(.rhs)[block_index];
     const start = &self.tree.nodes.items(.offset)[block_index];
 
