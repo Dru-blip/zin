@@ -11,9 +11,11 @@ pub const TokenIndex = u32;
 
 pub const Tag = enum(u8) {
     module,
+    func_decl,
     block,
     var_decl,
     expr_stmt,
+    param_list,
     assign,
     binop,
     uop,

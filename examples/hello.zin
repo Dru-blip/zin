@@ -1,12 +1,3 @@
-{
-    var x = 1 + 2;
-    x = 3;
-    {
-        var y = 4 + 5;
-        y = 6;
-    }
-}
-{
-    var z = 7 + 8;
-    z = 9;
+def add(a b){
+    var c = a + b;
 }

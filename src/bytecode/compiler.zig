@@ -16,6 +16,7 @@ tree: *Ast,
 unit: Unit,
 tokens: *std.ArrayList(Token),
 pos: usize,
+scope_depth: u32,
 
 const Compiler = @This();
 
@@ -30,11 +31,20 @@ pub fn init(
         .unit = try Unit.init(allocator, data_pool),
         .tokens = tokens,
         .pos = 0,
+        .scope_depth = 0,
     };
 }
 
 pub fn deinit(self: *Compiler) void {
     self.unit.deinit();
+}
+
+fn beginScope(self: *Compiler) void {
+    self.scope_depth += 1;
+}
+
+fn endScope(self: *Compiler) void {
+    self.scope_depth -= 1;
 }
 
 /// splits the given u32 into 4 u8 in little endian format
@@ -87,6 +97,7 @@ fn compileStmt(self: *Compiler, node: Node) Errors!void {
 }
 
 fn compileBlock(self: *Compiler, node: Node) !void {
+    self.beginScope();
     const total_stmts = node.rhs.?;
     const start_pos = node.offset.?;
 
@@ -99,6 +110,7 @@ fn compileBlock(self: *Compiler, node: Node) !void {
         next_stmt = stmt.next_stmt;
         i += 1;
     }
+    self.endScope();
 }
 
 fn compileVarDecl(self: *Compiler, node: Node) !void {

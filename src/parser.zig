@@ -145,70 +145,45 @@ fn eat(self: *Parser, tag: Token.Tag) SyntaxError!void {
 /// top level parse function
 pub fn parse(self: *Parser) !void {
     var total_nodes: u32 = 0;
-
-    const mod_index = try self.tree.append(.module, 0, null, null);
+    const module_index = try self.tree.append(.module, 0, null, null);
     var next_stmt: ?NodeIndex = null;
     // parse until eof token is hit
     loop: while (self.current_token.tag != .eof) {
-        state: switch (State.start) {
-            .start => {
-                switch (self.current_token.tag) {
-                    .keyword_var,
-                    => continue :state .var_decl,
-                    .left_brace => continue :state .block,
-                    else => {
-                        continue :state .expr_stmt;
-                    },
-                }
-            },
-            .var_decl => {
-                const ind = self.pVarDecl() catch {
-                    self.printError();
-                    break :loop;
-                };
-                if (next_stmt != null) self.setNextStmt(next_stmt.?, ind);
-                next_stmt = ind;
-            },
-            .expr_stmt => {
-                const ind = self.pExprStmt() catch {
-                    self.printError();
-                    break :loop;
-                };
+        const ind = self.pDecl() catch {
+            self.printError();
+            break :loop;
+        };
 
-                if (next_stmt != null) self.setNextStmt(next_stmt.?, ind);
-                next_stmt = ind;
-            },
-            .block => {
-                const ind = self.pBlock() catch {
-                    self.printError();
-                    break :loop;
-                };
-                if (next_stmt != null) self.setNextStmt(next_stmt.?, ind);
-                next_stmt = ind;
-            },
+        if (next_stmt) |prev| {
+            self.setNextStmt(prev, ind);
         }
-        // if (total_nodes == 0) {
-        // module_data.module.start = @intCast(self.tree.nodes.len - 1);
-        // }
+        next_stmt = ind;
         total_nodes += 1;
     }
-    self.tree.root = mod_index;
-    self.finishModule(mod_index, total_nodes);
+    self.tree.root = module_index;
+    self.finishModule(module_index, total_nodes);
 }
 
+//top level parsing function for declarations
+fn pDecl(self: *Parser) !NodeIndex {
+    switch (self.current_token.tag) {
+        .keyword_def => {
+            return try self.pFunctionDecl();
+        },
+        .keyword_var => {
+            return try self.pVarDecl();
+        },
+        else => {
+            return try self.pStmt();
+        },
+    }
+}
+
+//top level parsing function for statements
 fn pStmt(self: *Parser) !NodeIndex {
     switch (self.current_token.tag) {
-        .keyword_var => {
-            return self.pVarDecl() catch {
-                self.printError();
-                std.process.exit(1);
-            };
-        },
         .left_brace => {
-            return self.pBlock() catch {
-                self.printError();
-                std.process.exit(1);
-            };
+            return try self.pBlock();
         },
         else => {
             return try self.pExprStmt();
@@ -216,6 +191,23 @@ fn pStmt(self: *Parser) !NodeIndex {
     }
 }
 
+fn pFunctionDecl(self: *Parser) !NodeIndex {
+    try self.eat(.keyword_def);
+    const id = self.position;
+    try self.eat(.id);
+
+    const func_index = try self.tree.append(.func_decl, id, null, null);
+
+    const param_list_index = try self.pParamList();
+
+    const body_index = try self.pBlock();
+
+    self.finishFuncDecl(func_index, param_list_index, body_index);
+
+    return func_index;
+}
+
+// parsing function for block statements
 fn pBlock(self: *Parser) Errors!NodeIndex {
     try self.eat(.left_brace);
 
@@ -226,7 +218,7 @@ fn pBlock(self: *Parser) Errors!NodeIndex {
     var eof: bool = false;
     var next_stmt: ?NodeIndex = null;
     block_loop: while (self.current_token.tag != .right_brace) {
-        if (self.pStmt()) |ind| {
+        if (self.pDecl()) |ind| {
             if (next_stmt != null) self.setNextStmt(next_stmt.?, ind);
             next_stmt = ind;
         } else |err| {
@@ -234,8 +226,8 @@ fn pBlock(self: *Parser) Errors!NodeIndex {
                 eof = true;
                 break :block_loop;
             }
+            return err;
         }
-
         total_stmts += 1;
     }
 
@@ -253,13 +245,18 @@ fn pVarDecl(self: *Parser) !NodeIndex {
 
     const ind = try self.data_pool.addIdent(self.source[id.start..id.end]);
 
-    const varDecl = try self.tree.append(.var_decl, pos, ind, null);
+    const varDecl = try self.tree.append(
+        .var_decl,
+        pos,
+        ind,
+        null,
+    );
 
     const initializer = try self.pExpr(0);
 
     try self.expectSemicolon();
 
-    self.setVarDeclInit(varDecl, initializer);
+    self.finishVarDeclInit(varDecl, initializer);
     return varDecl;
 }
 
@@ -356,6 +353,29 @@ fn pIdentifier(self: *Parser) Errors!NodeIndex {
     return index;
 }
 
+fn pParamList(self: *Parser) !NodeIndex {
+    try self.eat(.left_paren);
+    const index = try self.tree.append(.param_list, self.position - 1, null, null);
+
+    var total_params: u32 = 0;
+    const offset: u32 = @truncate(self.tree.extra.items.len);
+    while (self.current_token.tag == .id) {
+        const param = self.position;
+        try self.eat(.id);
+        try self.tree.extra.append(param);
+        if (self.current_token.tag == .comma) {
+            self.advance();
+        }
+        total_params += 1;
+    }
+
+    (&self.tree.nodes.items(.rhs)[index]).* = total_params;
+    (&self.tree.nodes.items(.offset)[index]).* = offset;
+
+    try self.eat(.right_paren);
+    return index;
+}
+
 /// parse integer token
 fn pInteger(self: *Parser) Errors!NodeIndex {
     // get the current token
@@ -384,23 +404,47 @@ fn pInteger(self: *Parser) Errors!NodeIndex {
     return index;
 }
 
-inline fn setNextStmt(self: *Parser, stmt: NodeIndex, next_stmt: NodeIndex) void {
+inline fn setNextStmt(
+    self: *Parser,
+    stmt: NodeIndex,
+    next_stmt: NodeIndex,
+) void {
     const s = &self.tree.nodes.items(.next_stmt)[stmt];
     s.* = next_stmt;
 }
 
-inline fn setVarDeclInit(self: *Parser, varDecl: NodeIndex, initializer: NodeIndex) void {
+inline fn finishVarDeclInit(
+    self: *Parser,
+    varDecl: NodeIndex,
+    initializer: NodeIndex,
+) void {
     const s = &self.tree.nodes.items(.rhs)[varDecl];
     s.* = initializer;
 }
 
-inline fn finishModule(self: *Parser, module_index: NodeIndex, total_stmts: u32) void {
-    // const module = &self.tree.nodes.items(.rhs)[module_index];
+inline fn finishModule(
+    self: *Parser,
+    module_index: NodeIndex,
+    total_stmts: u32,
+) void {
     const total = &self.tree.nodes.items(.rhs)[module_index];
     const offset = &self.tree.nodes.items(.offset)[module_index];
 
     total.* = total_stmts;
     offset.* = 1;
+}
+
+inline fn finishFuncDecl(
+    self: *Parser,
+    func_index: NodeIndex,
+    params_list: NodeIndex,
+    body: NodeIndex,
+) void {
+    const params = &self.tree.nodes.items(.lhs)[func_index];
+    const body_pos = &self.tree.nodes.items(.rhs)[func_index];
+
+    params.* = params_list;
+    body_pos.* = body;
 }
 
 inline fn finishBlock(
